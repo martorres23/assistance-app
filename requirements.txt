@@ -1,0 +1,16 @@
+# This project uses Node.js and npm.
+# Key dependencies are listed below for reference.
+# See package.json for the full manifest and exact versions.
+# To install: npm install
+
+react
+react-dom
+typescript
+vite
+tailwindcss
+postcss
+autoprefixer
+framer-motion
+lucide-react
+leaflet
+react-leaflet
