@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import {
     BarChart, Bar, LineChart, Line, PieChart, Pie, Cell,
     XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend
@@ -12,18 +12,41 @@ interface AdminStatsViewProps {
     records: AttendanceRecord[];
 }
 
-const USERS = AuthService.getAllUsers().filter(u => u.role === 'employee');
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d'];
 
 export const AdminStatsView: React.FC<AdminStatsViewProps> = ({ records }) => {
-    const [selectedSede, setSelectedSede] = React.useState<string>('all');
-    const [selectedEmployee, setSelectedEmployee] = React.useState<string>('all');
-    const [timeRange, setTimeRange] = React.useState<'all' | 'week' | 'month'>('all');
+    const [selectedSede, setSelectedSede] = useState<string>('all');
+    const [selectedEmployee, setSelectedEmployee] = useState<string>('all');
+    const [timeRange, setTimeRange] = useState<'all' | 'week' | 'month'>('all');
 
-    const sedes = AuthService.getAllSedes();
+    const [sedes, setSedes] = useState<Sede[]>([]);
+    const [users, setUsers] = useState<User[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+
+    useEffect(() => {
+        const fetchData = async () => {
+            setIsLoading(true);
+            try {
+                const [allSedes, allUsers] = await Promise.all([
+                    AuthService.getAllSedes(),
+                    AuthService.getAllUsers()
+                ]);
+                setSedes(allSedes);
+                setUsers(allUsers.filter(u => u.role === 'employee'));
+            } catch (error) {
+                console.error('Error fetching stats data:', error);
+            } finally {
+                setIsLoading(false);
+            }
+        };
+
+        fetchData();
+    }, []);
 
     const dashboardData = useMemo(() => {
-        let filteredUsers = USERS;
+        if (isLoading) return null;
+
+        let filteredUsers = users;
 
         if (selectedSede !== 'all') {
             filteredUsers = filteredUsers.filter(u => u.sedeId === selectedSede);
@@ -69,7 +92,16 @@ export const AdminStatsView: React.FC<AdminStatsViewProps> = ({ records }) => {
             avgHours,
             heatmapData
         };
-    }, [records, selectedSede, selectedEmployee, timeRange]);
+    }, [records, users, selectedSede, selectedEmployee, timeRange, isLoading]);
+
+    if (isLoading || !dashboardData) {
+        return (
+            <div className="flex flex-col items-center justify-center p-12 text-gray-500 gap-3">
+                <div className="w-8 h-8 rounded-full border-4 border-blue-500 border-t-transparent animate-spin"></div>
+                <span>Cargando estadísticas...</span>
+            </div>
+        );
+    }
 
     return (
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -90,7 +122,7 @@ export const AdminStatsView: React.FC<AdminStatsViewProps> = ({ records }) => {
                     <select value={selectedEmployee} onChange={(e) => setSelectedEmployee(e.target.value)}
                         className="p-2 border rounded-lg text-sm bg-gray-50 outline-none focus:ring-2 focus:ring-blue-100">
                         <option value="all">Todos los Empleados</option>
-                        {USERS.map((u: User) => <option key={u.id} value={u.id}>{u.name}</option>)}
+                        {users.map((u: User) => <option key={u.id} value={u.id}>{u.name}</option>)}
                     </select>
                 </div>
             </div>
@@ -213,14 +245,11 @@ export const AdminStatsView: React.FC<AdminStatsViewProps> = ({ records }) => {
                     </div>
 
                     <div className="h-[80%] overflow-auto">
-                        {/* Simple Heatmap Grid Visualization */}
                         <div className="grid grid-cols-7 gap-2">
-                            {/* Weekday Headers */}
                             {['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'].map(d => (
                                 <div key={d} className="text-center text-xs font-medium text-gray-400 py-1">{d}</div>
                             ))}
 
-                            {/* Days */}
                             {dashboardData.heatmapData.map((day) => {
                                 const intensityClass = {
                                     0: 'bg-gray-100',

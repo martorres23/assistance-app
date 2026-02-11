@@ -1,10 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { CameraCapture } from '../../components/ui/CameraCapture';
 import { GeoLocation } from '../../components/ui/GeoLocation';
 import { StorageService } from '../../services/storage';
 import { AuthService } from '../../services/auth';
-import type { AttendanceRecord } from '../../types';
+import type { AttendanceRecord, Sede } from '../../types';
 import { motion, AnimatePresence } from 'framer-motion';
 import { LogOut, CheckCircle, MapPin } from 'lucide-react';
 import { EmployeeProfile } from './EmployeeProfile';
@@ -33,23 +33,41 @@ export const AttendanceScreen: React.FC = () => {
     const [recordType, setRecordType] = useState<'in' | 'out'>('in');
     const [location, setLocation] = useState<{ lat: number; lng: number, accuracy: number } | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [isLoading, setIsLoading] = useState(true);
+    const [assignedSede, setAssignedSede] = useState<Sede | undefined>(undefined);
+    const [records, setRecords] = useState<AttendanceRecord[]>([]);
 
-    // Get assigned Sede
-    const assignedSede = user ? AuthService.getSede(user.sedeId) : undefined;
+    // Fetch dependencies
+    useEffect(() => {
+        if (!user) return;
+
+        const fetchData = async () => {
+            setIsLoading(true);
+            try {
+                const [sede, allRecords] = await Promise.all([
+                    AuthService.getSede(user.sedeId),
+                    StorageService.getRecords()
+                ]);
+                setAssignedSede(sede);
+                setRecords(allRecords);
+            } catch (error) {
+                console.error('Error fetching data:', error);
+            } finally {
+                setIsLoading(false);
+            }
+        };
+
+        fetchData();
+    }, [user?.id]);
 
     // Calculate distance and check range
     const distanceToSede = (location && assignedSede)
         ? GeofencingUtils.calculateDistance(location.lat, location.lng, assignedSede.location.lat, assignedSede.location.lng)
         : null;
 
-    // TEMPORAL: Rango aumentado a 50km para pruebas en computadora sin GPS
-    // TODO: Reducir a 100m cuando se use en celular con GPS real
     const isWithinRange = (location && assignedSede)
         ? GeofencingUtils.isWithinRange(location.lat, location.lng, assignedSede.location.lat, assignedSede.location.lng, assignedSede.radiusMeters || 100)
         : false;
-
-    // Fetch records for stats
-    const records = StorageService.getRecords();
 
     const handleLogout = () => {
         AuthService.logout();
@@ -69,12 +87,12 @@ export const AttendanceScreen: React.FC = () => {
         setStep('evidence');
     };
 
-    const handleCapture = (photoUrl: string) => {
+    const handleCapture = async (photoUrl: string) => {
         if (!user || !location) return;
 
         setIsSubmitting(true);
         const newRecord: AttendanceRecord = {
-            id: crypto.randomUUID(),
+            id: crypto.randomUUID(), // Will be overwritten by DB UUID but useful for type consistency
             userId: user.id,
             userName: user.name,
             type: recordType,
@@ -83,7 +101,13 @@ export const AttendanceScreen: React.FC = () => {
             photoUrl: photoUrl,
         };
 
-        StorageService.saveRecord(newRecord);
+        const { error } = await StorageService.saveRecord(newRecord);
+
+        if (error) {
+            alert('Error al guardar el registro. Intente de nuevo.');
+            setIsSubmitting(false);
+            return;
+        }
 
         // Show success feedback briefly then reset/logout or go to history
         setTimeout(() => {
@@ -98,8 +122,17 @@ export const AttendanceScreen: React.FC = () => {
         return null;
     }
 
+    if (isLoading) {
+        return (
+            <div className="min-h-screen flex flex-col items-center justify-center p-12 text-gray-500 gap-3 bg-gray-50">
+                <div className="w-10 h-10 rounded-full border-4 border-blue-500 border-t-transparent animate-spin"></div>
+                <span className="font-medium">Cargando aplicación...</span>
+            </div>
+        );
+    }
+
     return (
-        <div className="min-h-screen bg-gray-50 flex flex-col">
+        <div className="min-h-screen bg-gray-50 animate-in fade-in duration-500">
             {/* Header */}
             <header className="bg-white p-4 shadow-sm flex justify-between items-center z-10">
                 <div>

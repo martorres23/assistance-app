@@ -7,19 +7,29 @@ import { Lock } from 'lucide-react';
 export const LoginScreen: React.FC = () => {
     const [pin, setPin] = useState('');
     const [error, setError] = useState('');
+    const [isLoading, setIsLoading] = useState(false);
     const navigate = useNavigate();
 
-    const handleLogin = (e: React.FormEvent) => {
+    const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
-        const user = AuthService.login(pin);
-        if (user) {
-            if (user.role === 'admin') {
-                navigate('/admin');
+        setIsLoading(true);
+        setError('');
+
+        try {
+            const user = await AuthService.login(pin);
+            if (user) {
+                if (user.role === 'admin') {
+                    navigate('/admin');
+                } else {
+                    navigate('/attendance');
+                }
             } else {
-                navigate('/attendance');
+                setError('PIN inválido');
             }
-        } else {
-            setError('PIN inválido');
+        } catch (err) {
+            setError('Error de conexión');
+        } finally {
+            setIsLoading(false);
         }
     };
 
@@ -64,9 +74,15 @@ export const LoginScreen: React.FC = () => {
 
                     <button
                         type="submit"
-                        className="w-full py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-semibold text-lg shadow-lg shadow-blue-200 active:scale-[0.98] transition-all"
+                        disabled={isLoading}
+                        className="w-full py-4 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded-xl font-semibold text-lg shadow-lg shadow-blue-200 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
                     >
-                        Ingresar
+                        {isLoading ? (
+                            <>
+                                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                                <span>Ingresando...</span>
+                            </>
+                        ) : 'Ingresar'}
                     </button>
                 </form>
 

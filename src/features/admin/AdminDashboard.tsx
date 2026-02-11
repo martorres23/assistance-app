@@ -28,11 +28,26 @@ import { AdminPayrollView } from './AdminPayrollView';
 export const AdminDashboard: React.FC = () => {
     const navigate = useNavigate();
     const [records, setRecords] = useState<AttendanceRecord[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+
     // Restore last view from sessionStorage, default to 'list'
     const savedView = sessionStorage.getItem('admin_last_view') as 'list' | 'map' | 'stats' | 'employees' | 'sedes' | 'payroll' | null;
     const [view, setView] = useState<'list' | 'map' | 'stats' | 'employees' | 'sedes' | 'payroll'>(savedView || 'list');
+
     // Close sidebar by default on mobile, open on desktop
     const [isSidebarOpen, setIsSidebarOpen] = useState(window.innerWidth >= 768);
+
+    const fetchRecords = async () => {
+        setIsLoading(true);
+        try {
+            const allRecords = await StorageService.getRecords();
+            setRecords(allRecords);
+        } catch (error) {
+            console.error('Error fetching records:', error);
+        } finally {
+            setIsLoading(false);
+        }
+    };
 
     useEffect(() => {
         // Clear the saved view after restoring it
@@ -40,7 +55,7 @@ export const AdminDashboard: React.FC = () => {
             sessionStorage.removeItem('admin_last_view');
         }
 
-        setRecords(StorageService.getRecords());
+        fetchRecords();
 
         // Handle window resize
         const handleResize = () => {
@@ -54,6 +69,10 @@ export const AdminDashboard: React.FC = () => {
         window.addEventListener('resize', handleResize);
         return () => window.removeEventListener('resize', handleResize);
     }, []);
+
+    const onRefreshRecords = () => {
+        fetchRecords();
+    };
 
     const handleLogout = () => {
         AuthService.logout();
@@ -181,7 +200,7 @@ export const AdminDashboard: React.FC = () => {
                         </div>
                     </header>
 
-                    {view === 'employees' && <AdminEmployeeList records={records} />}
+                    {view === 'employees' && <AdminEmployeeList records={records} onRefreshRecords={onRefreshRecords} />}
 
                     {view === 'sedes' && <AdminSedeList />}
 
@@ -191,7 +210,12 @@ export const AdminDashboard: React.FC = () => {
 
                     {view === 'list' && (
                         <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-500">
-                            {records.length === 0 ? (
+                            {isLoading ? (
+                                <div className="p-12 text-center text-gray-500 flex flex-col items-center gap-3">
+                                    <div className="w-8 h-8 rounded-full border-4 border-blue-500 border-t-transparent animate-spin"></div>
+                                    <span>Cargando registros...</span>
+                                </div>
+                            ) : records.length === 0 ? (
                                 <div className="text-center text-gray-500 p-12">
                                     <p>No hay registros de asistencia aún.</p>
                                 </div>
@@ -213,12 +237,14 @@ export const AdminDashboard: React.FC = () => {
                                                     </p>
                                                 </div>
                                             </div>
-                                            <span className={`px-3 py-1 rounded-full text-xs font-medium ${record.type === 'in'
-                                                ? 'bg-green-50 text-green-700 border border-green-100'
-                                                : 'bg-red-50 text-red-700 border border-red-100'
-                                                }`}>
-                                                {record.type === 'in' ? 'ENTRADA' : 'SALIDA'}
-                                            </span>
+                                            <div className="flex items-center gap-4">
+                                                <span className={`px-3 py-1 rounded-full text-xs font-medium ${record.type === 'in'
+                                                    ? 'bg-green-50 text-green-700 border border-green-100'
+                                                    : 'bg-red-50 text-red-700 border border-red-100'
+                                                    }`}>
+                                                    {record.type === 'in' ? 'ENTRADA' : 'SALIDA'}
+                                                </span>
+                                            </div>
                                         </div>
                                     ))}
                                 </div>
@@ -228,31 +254,37 @@ export const AdminDashboard: React.FC = () => {
 
                     {view === 'map' && (
                         <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 h-[calc(100vh-120px)] md:h-[600px] animate-in fade-in slide-in-from-bottom-4 duration-500">
-                            <MapContainer center={[centerLat, centerLng]} zoom={13} style={{ height: "100%", width: "100%", borderRadius: "0.75rem" }}>
-                                <TileLayer
-                                    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                                    attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-                                />
-                                {records.map(record => (
-                                    <Marker
-                                        key={record.id}
-                                        position={[record.location.lat, record.location.lng]}
-                                    >
-                                        <Popup>
-                                            <div className="text-center">
-                                                <strong className="block text-gray-900">{record.userName}</strong>
-                                                <span className={`text-xs font-bold ${record.type === 'in' ? 'text-green-600' : 'text-red-600'}`}>
-                                                    {record.type === 'in' ? 'ENTRADA' : 'SALIDA'}
-                                                </span>
-                                                <br />
-                                                <span className="text-xs text-gray-500">
-                                                    {new Date(record.timestamp).toLocaleString()}
-                                                </span>
-                                            </div>
-                                        </Popup>
-                                    </Marker>
-                                ))}
-                            </MapContainer>
+                            {isLoading ? (
+                                <div className="h-full flex items-center justify-center">
+                                    <div className="w-8 h-8 rounded-full border-4 border-blue-500 border-t-transparent animate-spin"></div>
+                                </div>
+                            ) : (
+                                <MapContainer center={[centerLat, centerLng]} zoom={13} style={{ height: "100%", width: "100%", borderRadius: "0.75rem" }}>
+                                    <TileLayer
+                                        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                                        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                                    />
+                                    {records.map(record => (
+                                        <Marker
+                                            key={record.id}
+                                            position={[record.location.lat, record.location.lng]}
+                                        >
+                                            <Popup>
+                                                <div className="text-center">
+                                                    <strong className="block text-gray-900">{record.userName}</strong>
+                                                    <span className={`text-xs font-bold ${record.type === 'in' ? 'text-green-600' : 'text-red-600'}`}>
+                                                        {record.type === 'in' ? 'ENTRADA' : 'SALIDA'}
+                                                    </span>
+                                                    <br />
+                                                    <span className="text-xs text-gray-500">
+                                                        {new Date(record.timestamp).toLocaleString()}
+                                                    </span>
+                                                </div>
+                                            </Popup>
+                                        </Marker>
+                                    ))}
+                                </MapContainer>
+                            )}
                         </div>
                     )}
                 </div>

@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { AuthService } from '../../services/auth';
 import type { Sede } from '../../types';
 import { MapPin, Plus, Trash2, Building, Navigation, Edit2 } from 'lucide-react';
 
 export const AdminSedeList: React.FC = () => {
-    const [sedes, setSedes] = useState<Sede[]>(AuthService.getAllSedes());
+    const [sedes, setSedes] = useState<Sede[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
     const [editingSede, setEditingSede] = useState<Sede | 'new' | null>(null);
     const [formData, setFormData] = useState<Partial<Sede>>({
         name: '',
@@ -12,6 +13,22 @@ export const AdminSedeList: React.FC = () => {
         location: { lat: 0, lng: 0 },
         radiusMeters: 100
     });
+
+    const fetchSedes = async () => {
+        setIsLoading(true);
+        try {
+            const allSedes = await AuthService.getAllSedes();
+            setSedes(allSedes);
+        } catch (error) {
+            console.error('Error fetching sedes:', error);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchSedes();
+    }, []);
 
     const handleOpenForm = (sede: Sede | 'new') => {
         if (sede === 'new') {
@@ -22,36 +39,59 @@ export const AdminSedeList: React.FC = () => {
         setEditingSede(sede);
     };
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!formData.name || !formData.address) return;
 
-        if (editingSede === 'new') {
-            const sedeToAdd: Sede = {
-                id: crypto.randomUUID(),
-                name: formData.name!,
-                address: formData.address!,
-                location: formData.location as { lat: number; lng: number },
-                radiusMeters: formData.radiusMeters || 100
-            };
-            AuthService.addSede(sedeToAdd);
-        } else if (editingSede) {
-            AuthService.updateSede({
-                ...editingSede,
-                ...formData
-            } as Sede);
-        }
+        setIsLoading(true);
+        try {
+            if (editingSede === 'new') {
+                const sedeToAdd: Sede = {
+                    id: crypto.randomUUID(),
+                    name: formData.name!,
+                    address: formData.address!,
+                    location: formData.location as { lat: number; lng: number },
+                    radiusMeters: formData.radiusMeters || 100
+                };
+                await AuthService.addSede(sedeToAdd);
+            } else if (editingSede) {
+                await AuthService.updateSede({
+                    ...editingSede,
+                    ...formData
+                } as Sede);
+            }
 
-        setSedes(AuthService.getAllSedes());
-        setEditingSede(null);
+            await fetchSedes();
+            setEditingSede(null);
+        } catch (error) {
+            alert('Error al guardar la sede');
+        } finally {
+            setIsLoading(false);
+        }
     };
 
-    const handleDelete = (id: string) => {
+    const handleDelete = async (id: string) => {
         if (confirm('¿Confirma que desea eliminar esta sede?')) {
-            AuthService.deleteSede(id);
-            setSedes(AuthService.getAllSedes());
+            setIsLoading(true);
+            try {
+                await AuthService.deleteSede(id);
+                await fetchSedes();
+            } catch (error) {
+                alert('Error al eliminar la sede');
+            } finally {
+                setIsLoading(false);
+            }
         }
     };
+
+    if (isLoading && sedes.length === 0) {
+        return (
+            <div className="flex flex-col items-center justify-center p-12 text-gray-500 gap-3 bg-white rounded-xl border border-gray-100">
+                <div className="w-8 h-8 rounded-full border-4 border-blue-500 border-t-transparent animate-spin"></div>
+                <span>Cargando sedes...</span>
+            </div>
+        );
+    }
 
     return (
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">

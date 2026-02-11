@@ -1,5 +1,5 @@
-import React from 'react';
-import type { User } from '../../types';
+import React, { useState, useEffect } from 'react';
+import type { User, Sede } from '../../types';
 import { AuthService } from '../../services/auth';
 import { MapPin, User as UserIcon, Building } from 'lucide-react';
 
@@ -8,7 +8,24 @@ interface EmployeeProfileProps {
 }
 
 export const EmployeeProfile: React.FC<EmployeeProfileProps> = ({ user }) => {
-    const sede = AuthService.getSede(user.sedeId);
+    const [sede, setSede] = useState<Sede | undefined>(undefined);
+    const [isLoading, setIsLoading] = useState(true);
+
+    useEffect(() => {
+        const fetchSede = async () => {
+            setIsLoading(true);
+            try {
+                const sedeData = await AuthService.getSede(user.sedeId);
+                setSede(sedeData);
+            } catch (error) {
+                console.error('Error fetching sede for profile:', error);
+            } finally {
+                setIsLoading(false);
+            }
+        };
+
+        fetchSede();
+    }, [user.sedeId]);
 
     return (
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -28,7 +45,9 @@ export const EmployeeProfile: React.FC<EmployeeProfileProps> = ({ user }) => {
                     Sede Asignada
                 </h3>
 
-                {sede ? (
+                {isLoading ? (
+                    <div className="h-24 bg-gray-50 animate-pulse rounded-lg border border-gray-100"></div>
+                ) : sede ? (
                     <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
                         <div className="flex items-start gap-3">
                             <MapPin className="w-5 h-5 text-blue-600 mt-1 shrink-0" />

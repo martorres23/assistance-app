@@ -1,49 +1,28 @@
 import type { User, Sede } from '../types';
+import { supabase } from '../lib/supabase';
 
-const USERS_KEY = 'app_users';
-const SEDES_KEY = 'app_sedes';
 const AUTH_KEY = 'auth_user';
 
-const INITIAL_SEDES: Sede[] = [
-    {
-        id: '1',
-        name: 'Sede Principal',
-        location: { lat: 7.31182, lng: -72.48478 },
-        address: 'Calle 1 # 1-1',
-        radiusMeters: 100
-    },
-    {
-        id: '2',
-        name: 'Sede Norte',
-        location: { lat: 4.6597, lng: -74.0517 },
-        address: 'Calle 100 # 15-15',
-        radiusMeters: 100
-    }
-];
-
-const INITIAL_USERS: User[] = [
-    { id: '1', name: 'Admin User', role: 'admin', pin: 'admin123' },
-    { id: '2', name: 'Juan Perez', role: 'employee', pin: '1234', sedeId: '1' },
-    { id: '3', name: 'Maria Gomez', role: 'employee', pin: '5678', sedeId: '2' },
-];
-
-// Initialize storage if empty
-if (!localStorage.getItem(SEDES_KEY)) {
-    localStorage.setItem(SEDES_KEY, JSON.stringify(INITIAL_SEDES));
-}
-if (!localStorage.getItem(USERS_KEY)) {
-    localStorage.setItem(USERS_KEY, JSON.stringify(INITIAL_USERS));
-}
-
 export const AuthService = {
-    login: (pin: string): User | null => {
-        const users = AuthService.getAllUsers();
-        const user = users.find(u => u.pin === pin);
-        if (user) {
-            localStorage.setItem(AUTH_KEY, JSON.stringify(user));
-            return user;
-        }
-        return null;
+    login: async (pin: string): Promise<User | null> => {
+        const { data: user, error } = await supabase
+            .from('users')
+            .select('*')
+            .eq('pin', pin)
+            .single();
+
+        if (error || !user) return null;
+
+        const formattedUser: User = {
+            id: user.id,
+            name: user.name,
+            role: user.role as any,
+            pin: user.pin,
+            sedeId: user.sede_id
+        };
+
+        localStorage.setItem(AUTH_KEY, JSON.stringify(formattedUser));
+        return formattedUser;
     },
 
     logout: () => {
@@ -56,54 +35,126 @@ export const AuthService = {
     },
 
     // Sede Management
-    getSede: (sedeId?: string): Sede | undefined => {
-        return AuthService.getAllSedes().find(s => s.id === sedeId);
+    getSede: async (sedeId?: string): Promise<Sede | undefined> => {
+        if (!sedeId) return undefined;
+        const { data, error } = await supabase
+            .from('sedes')
+            .select('*')
+            .eq('id', sedeId)
+            .single();
+
+        if (error || !data) return undefined;
+        return {
+            id: data.id,
+            name: data.name,
+            address: data.address,
+            location: { lat: data.lat, lng: data.lng },
+            radiusMeters: data.radius_meters
+        };
     },
 
-    getAllSedes: (): Sede[] => {
-        const stored = localStorage.getItem(SEDES_KEY);
-        const sedes: Sede[] = stored ? JSON.parse(stored) : [];
-        // Ensure all sedes have a radiusMeters field
-        return sedes.map(s => ({
-            ...s,
-            radiusMeters: s.radiusMeters ?? 100
+    getAllSedes: async (): Promise<Sede[]> => {
+        const { data, error } = await supabase
+            .from('sedes')
+            .select('*')
+            .order('name');
+
+        if (error || !data) return [];
+        return data.map(s => ({
+            id: s.id,
+            name: s.name,
+            address: s.address,
+            location: { lat: s.lat, lng: s.lng },
+            radiusMeters: s.radius_meters
         }));
     },
 
-    addSede: (sede: Sede) => {
-        const sedes = AuthService.getAllSedes();
-        localStorage.setItem(SEDES_KEY, JSON.stringify([...sedes, sede]));
+    addSede: async (sede: Omit<Sede, 'id'>) => {
+        const { error } = await supabase
+            .from('sedes')
+            .insert({
+                name: sede.name,
+                address: sede.address,
+                lat: sede.location.lat,
+                lng: sede.location.lng,
+                radius_meters: sede.radiusMeters
+            });
+        return { error };
     },
 
-    deleteSede: (sedeId: string) => {
-        const sedes = AuthService.getAllSedes().filter(s => s.id !== sedeId);
-        localStorage.setItem(SEDES_KEY, JSON.stringify(sedes));
+    deleteSede: async (sedeId: string) => {
+        const { error } = await supabase
+            .from('sedes')
+            .delete()
+            .eq('id', sedeId);
+        return { error };
     },
 
-    updateSede: (updatedSede: Sede) => {
-        const sedes = AuthService.getAllSedes().map(s => s.id === updatedSede.id ? updatedSede : s);
-        localStorage.setItem(SEDES_KEY, JSON.stringify(sedes));
+    updateSede: async (updatedSede: Sede) => {
+        const { error } = await supabase
+            .from('sedes')
+            .update({
+                name: updatedSede.name,
+                address: updatedSede.address,
+                lat: updatedSede.location.lat,
+                lng: updatedSede.location.lng,
+                radius_meters: updatedSede.radiusMeters
+            })
+            .eq('id', updatedSede.id);
+        return { error };
     },
 
     // User Management
-    getAllUsers: (): User[] => {
-        const stored = localStorage.getItem(USERS_KEY);
-        return stored ? JSON.parse(stored) : [];
+    getAllUsers: async (): Promise<User[]> => {
+        const { data, error } = await supabase
+            .from('users')
+            .select('*')
+            .order('name');
+
+        if (error || !data) return [];
+        return data.map(u => ({
+            id: u.id,
+            name: u.name,
+            role: u.role as any,
+            pin: u.pin,
+            sedeId: u.sede_id
+        }));
     },
 
-    addUser: (user: User) => {
-        const users = AuthService.getAllUsers();
-        localStorage.setItem(USERS_KEY, JSON.stringify([...users, user]));
+    addUser: async (user: User) => {
+        const { error } = await supabase
+            .from('users')
+            .insert({
+                id: user.id,
+                name: user.name,
+                role: user.role,
+                pin: user.pin,
+                sede_id: user.sedeId
+            });
+        return { error };
     },
 
-    deleteUser: (userId: string) => {
-        const users = AuthService.getAllUsers().filter(u => u.id !== userId);
-        localStorage.setItem(USERS_KEY, JSON.stringify(users));
+    deleteUser: async (userId: string) => {
+        const { error } = await supabase
+            .from('users')
+            .delete()
+            .eq('id', userId);
+        return { error };
     },
 
-    updateUser: (updatedUser: User, oldId?: string) => {
+    updateUser: async (updatedUser: User, oldId?: string) => {
         const idToMatch = oldId || updatedUser.id;
-        const users = AuthService.getAllUsers().map(u => u.id === idToMatch ? updatedUser : u);
-        localStorage.setItem(USERS_KEY, JSON.stringify(users));
+        const { error } = await supabase
+            .from('users')
+            .update({
+                id: updatedUser.id,
+                name: updatedUser.name,
+                role: updatedUser.role,
+                pin: updatedUser.pin,
+                sede_id: updatedUser.sedeId
+            })
+            .eq('id', idToMatch);
+        return { error };
     }
 };
+

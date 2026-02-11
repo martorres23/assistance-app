@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { AuthService } from '../../services/auth';
 import type { AttendanceRecord, User, Sede } from '../../types';
 import { PayrollUtils } from '../../utils/payroll';
@@ -12,9 +12,29 @@ export const AdminPayrollView: React.FC<AdminPayrollViewProps> = ({ records }) =
     const [selectedSede, setSelectedSede] = useState<string>('all');
     const [selectedEmployee, setSelectedEmployee] = useState<string>('all');
     const [timeRange, setTimeRange] = useState<'all' | 'week' | 'month'>('all');
+    const [sedes, setSedes] = useState<Sede[]>([]);
+    const [users, setUsers] = useState<User[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
 
-    const sedes = AuthService.getAllSedes();
-    const USERS = AuthService.getAllUsers().filter(u => u.role === 'employee');
+    useEffect(() => {
+        const fetchData = async () => {
+            setIsLoading(true);
+            try {
+                const [allSedes, allUsers] = await Promise.all([
+                    AuthService.getAllSedes(),
+                    AuthService.getAllUsers()
+                ]);
+                setSedes(allSedes);
+                setUsers(allUsers.filter(u => u.role === 'employee'));
+            } catch (error) {
+                console.error('Error fetching payroll data:', error);
+            } finally {
+                setIsLoading(false);
+            }
+        };
+
+        fetchData();
+    }, []);
 
     const handleGeneratePayroll = () => {
         // Determine date range for export
@@ -31,7 +51,7 @@ export const AdminPayrollView: React.FC<AdminPayrollViewProps> = ({ records }) =
             range = { start: lastMonth, end: now };
         }
 
-        let usersToExport = USERS;
+        let usersToExport = users;
         if (selectedSede !== 'all') {
             usersToExport = usersToExport.filter((u: User) => u.sedeId === selectedSede);
         }
@@ -42,6 +62,15 @@ export const AdminPayrollView: React.FC<AdminPayrollViewProps> = ({ records }) =
         const csvContent = PayrollUtils.generateCSV(records, usersToExport, range?.start, range?.end);
         PayrollUtils.downloadCSV(csvContent, `nomina-${new Date().toISOString().split('T')[0]}.csv`);
     };
+
+    if (isLoading) {
+        return (
+            <div className="flex flex-col items-center justify-center p-12 text-gray-500 gap-3">
+                <div className="w-8 h-8 rounded-full border-4 border-blue-500 border-t-transparent animate-spin"></div>
+                <span>Cargando datos de nómina...</span>
+            </div>
+        );
+    }
 
     return (
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -90,7 +119,7 @@ export const AdminPayrollView: React.FC<AdminPayrollViewProps> = ({ records }) =
                                 className="w-full p-3 border border-gray-200 rounded-lg bg-gray-50 focus:bg-white focus:ring-2 focus:ring-blue-500 transition-all outline-none"
                             >
                                 <option value="all">Todos los Empleados</option>
-                                {USERS.map((u: User) => (
+                                {users.map((u: User) => (
                                     <option key={u.id} value={u.id}>{u.name}</option>
                                 ))}
                             </select>

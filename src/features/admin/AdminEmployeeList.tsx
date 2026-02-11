@@ -1,17 +1,21 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { AuthService } from '../../services/auth';
 import { StorageService } from '../../services/storage';
 import { MapPin, User as UserIcon, Hash, ChevronLeft, Clock, Plus, Trash2, RefreshCw, Edit2 } from 'lucide-react';
-import type { AttendanceRecord, User } from '../../types';
+import type { AttendanceRecord, User, Sede } from '../../types';
 import { DateUtils } from '../../utils/date';
 
 interface AdminEmployeeListProps {
     records: AttendanceRecord[];
+    onRefreshRecords: () => void; // Added to refresh records in parent
 }
 
-export const AdminEmployeeList: React.FC<AdminEmployeeListProps> = ({ records }) => {
+export const AdminEmployeeList: React.FC<AdminEmployeeListProps> = ({ records, onRefreshRecords }) => {
     const [selectedEmployeeId, setSelectedEmployeeId] = useState<string | null>(null);
     const [editingUser, setEditingUser] = useState<User | 'new' | null>(null);
+    const [employees, setEmployees] = useState<User[]>([]);
+    const [sedes, setSedes] = useState<Sede[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
     const [formData, setFormData] = useState<Partial<User>>({
         id: '',
         name: '',
@@ -21,11 +25,29 @@ export const AdminEmployeeList: React.FC<AdminEmployeeListProps> = ({ records })
     });
     const [selectedPhoto, setSelectedPhoto] = useState<string | null>(null);
 
-    const employees = AuthService.getAllUsers().filter(u => u.role === 'employee');
-    const sedes = AuthService.getAllSedes();
+    // Fetch data
+    const fetchData = async () => {
+        setIsLoading(true);
+        try {
+            const [allUsers, allSedes] = await Promise.all([
+                AuthService.getAllUsers(),
+                AuthService.getAllSedes()
+            ]);
+            setEmployees(allUsers.filter(u => u.role === 'employee'));
+            setSedes(allSedes);
+        } catch (error) {
+            console.error('Error fetching admin data:', error);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchData();
+    }, []);
 
     const getSedeName = (sedeId?: string) => {
-        const sede = AuthService.getSede(sedeId);
+        const sede = sedes.find(s => s.id === sedeId);
         return sede ? sede.name : 'Sede Desconocida';
     };
 
@@ -39,83 +61,98 @@ export const AdminEmployeeList: React.FC<AdminEmployeeListProps> = ({ records })
         setSelectedEmployeeId(null); // Close detail view when editing
     };
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!formData.name || !formData.pin || !formData.id) {
             alert('Por favor complete todos los campos (ID, Nombre y PIN)');
             return;
         }
 
-        if (editingUser === 'new') {
-            const exists = AuthService.getAllUsers().some(u => u.id === formData.id);
-            if (exists) {
-                alert('Ya existe un usuario con este ID');
-                return;
-            }
-
-            const userToAdd: User = {
-                id: formData.id!,
-                name: formData.name!,
-                role: 'employee',
-                pin: formData.pin!,
-                sedeId: formData.sedeId
-            };
-            AuthService.addUser(userToAdd);
-        } else if (editingUser && typeof editingUser !== 'string') {
-            const oldId = editingUser.id;
-            const newId = formData.id!;
-
-            // If ID is changing, validate new ID doesn't exist
-            if (newId !== oldId) {
-                const exists = AuthService.getAllUsers().some(u => u.id === newId);
+        setIsLoading(true);
+        try {
+            if (editingUser === 'new') {
+                const exists = employees.some(u => u.id === formData.id);
                 if (exists) {
                     alert('Ya existe un usuario con este ID');
                     return;
                 }
 
-                // Update attendance records with new ID
-                const records = StorageService.getRecords();
-                const updatedRecords = records.map(r =>
-                    r.userId === oldId ? { ...r, userId: newId } : r
-                );
-                localStorage.setItem('attendance_records', JSON.stringify(updatedRecords));
+                const userToAdd: User = {
+                    id: formData.id!,
+                    name: formData.name!,
+                    role: 'employee',
+                    pin: formData.pin!,
+                    sedeId: formData.sedeId
+                };
+                await AuthService.addUser(userToAdd);
+            } else if (editingUser && typeof editingUser !== 'string') {
+                const oldId = editingUser.id;
+                const newId = formData.id!;
+
+                // If ID is changing, validate new ID doesn't exist
+                if (newId !== oldId) {
+                    const exists = employees.some(u => u.id === newId);
+                    if (exists) {
+                        alert('Ya existe un usuario con este ID');
+                        return;
+                    }
+                }
+
+                await AuthService.updateUser({
+                    ...editingUser,
+                    ...formData
+                } as User, oldId);
             }
 
-            AuthService.updateUser({
-                ...editingUser,
-                ...formData
-            } as User, oldId);
+            setEditingUser(null);
+            await fetchData(); // Refresh list
+            onRefreshRecords(); // Refresh history if needed
+        } catch (error) {
+            alert('Error al guardar cambios');
+        } finally {
+            setIsLoading(false);
         }
-
-        setEditingUser(null);
-        // Trigger storage event to update other components, then reload
-        window.dispatchEvent(new Event('storage'));
-        // Small delay to ensure localStorage updates are complete before reload
-        setTimeout(() => {
-            // Save current view before reload
-            sessionStorage.setItem('admin_last_view', 'employees');
-            window.location.reload();
-        }, 50);
     };
 
-    const handleDeleteUser = (id: string, e: React.MouseEvent) => {
+    const handleDeleteUser = async (id: string, e: React.MouseEvent) => {
         e.stopPropagation();
         if (confirm('¿Confirma que desea eliminar este empleado?')) {
-            AuthService.deleteUser(id);
-            sessionStorage.setItem('admin_last_view', 'employees');
-            window.location.reload();
+            setIsLoading(true);
+            try {
+                await AuthService.deleteUser(id);
+                await fetchData();
+            } catch (error) {
+                alert('Error al eliminar');
+            } finally {
+                setIsLoading(false);
+            }
         }
     };
 
-    const handleResetAttendance = (userId: string) => {
+    const handleResetAttendance = async (userId: string) => {
         if (confirm('¿Desea reiniciar la asistencia de hoy para este empleado?')) {
-            const today = DateUtils.getColombiaDate();
-            StorageService.deleteRecordsForUser(userId, today);
-            alert('Asistencia reiniciada correctamente.');
-            sessionStorage.setItem('admin_last_view', 'employees');
-            window.location.reload();
+            setIsLoading(true);
+            try {
+                const today = DateUtils.getColombiaDate();
+                await StorageService.deleteRecordsForUser(userId, today);
+                onRefreshRecords(); // Refresh global records
+                alert('Asistencia reiniciada correctamente.');
+            } catch (error) {
+                alert('Error al reiniciar');
+            } finally {
+                setIsLoading(false);
+            }
         }
     };
+
+    if (isLoading) {
+        return (
+            <div className="flex flex-col items-center justify-center p-12 text-gray-500 gap-3">
+                <div className="w-8 h-8 rounded-full border-4 border-blue-500 border-t-transparent animate-spin"></div>
+                <span>Cargando datos...</span>
+            </div>
+        );
+    }
 
     return (
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -194,12 +231,12 @@ export const AdminEmployeeList: React.FC<AdminEmployeeListProps> = ({ records })
                                                         </p>
                                                     </div>
                                                 </div>
-                                                {(record.photoUrl || (record as any).photo) && (
+                                                {record.photoUrl && (
                                                     <img
-                                                        src={record.photoUrl || (record as any).photo}
+                                                        src={record.photoUrl}
                                                         alt="Evidence"
                                                         className="w-12 h-12 rounded object-cover cursor-pointer hover:opacity-80 transition-opacity"
-                                                        onClick={() => setSelectedPhoto(record.photoUrl || (record as any).photo)}
+                                                        onClick={() => setSelectedPhoto(record.photoUrl || null)}
                                                     />
                                                 )}
                                             </div>
@@ -351,7 +388,7 @@ export const AdminEmployeeList: React.FC<AdminEmployeeListProps> = ({ records })
                 </div>
             )}
 
-            {/* Photo Modal - Now outside of conditionals so it's always available */}
+            {/* Photo Modal */}
             {selectedPhoto && (
                 <div
                     className="fixed inset-0 bg-black bg-opacity-75 z-[2000] flex items-center justify-center p-4"
@@ -377,3 +414,4 @@ export const AdminEmployeeList: React.FC<AdminEmployeeListProps> = ({ records })
         </div>
     );
 };
+
