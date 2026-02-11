@@ -42,8 +42,10 @@ export const AttendanceScreen: React.FC = () => {
         ? GeofencingUtils.calculateDistance(location.lat, location.lng, assignedSede.location.lat, assignedSede.location.lng)
         : null;
 
+    // TEMPORAL: Rango aumentado a 50km para pruebas en computadora sin GPS
+    // TODO: Reducir a 100m cuando se use en celular con GPS real
     const isWithinRange = (location && assignedSede)
-        ? GeofencingUtils.isWithinRange(location.lat, location.lng, assignedSede.location.lat, assignedSede.location.lng, 100) // 100m range
+        ? GeofencingUtils.isWithinRange(location.lat, location.lng, assignedSede.location.lat, assignedSede.location.lng, assignedSede.radiusMeters || 100)
         : false;
 
     // Fetch records for stats
@@ -144,7 +146,7 @@ export const AttendanceScreen: React.FC = () => {
                                             {isWithinRange ? 'Estás en la zona correcta' : 'Estás fuera de zona'}
                                         </p>
                                         <p className="text-xs opacity-90">
-                                            Distancia a {assignedSede.name}: <span className="font-mono font-bold">{Math.round(distanceToSede || 0)}m</span> (Max 100m)
+                                            Distancia a {assignedSede.name}: <span className="font-mono font-bold">{Math.round(distanceToSede || 0)}m</span> (Max {assignedSede.radiusMeters || 100}m)
                                         </p>
                                     </div>
                                 </div>

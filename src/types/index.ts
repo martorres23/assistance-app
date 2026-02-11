@@ -8,6 +8,7 @@ export interface Sede {
         lng: number;
     };
     address: string;
+    radiusMeters: number;
 }
 
 export interface User {

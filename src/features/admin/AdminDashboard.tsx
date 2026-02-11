@@ -4,7 +4,7 @@ import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
 import { StorageService } from '../../services/storage';
 import { AuthService } from '../../services/auth';
 import type { AttendanceRecord } from '../../types';
-import { LogOut, Map as MapIcon, List, Clock, Users, LayoutDashboard, Menu, FileText } from 'lucide-react';
+import { LogOut, Map as MapIcon, List, Clock, Users, LayoutDashboard, Menu, FileText, Building } from 'lucide-react';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 
@@ -22,16 +22,24 @@ L.Marker.prototype.options.icon = DefaultIcon;
 
 import { AdminStatsView } from './AdminStatsView';
 import { AdminEmployeeList } from './AdminEmployeeList';
+import { AdminSedeList } from './AdminSedeList';
 import { AdminPayrollView } from './AdminPayrollView';
 
 export const AdminDashboard: React.FC = () => {
     const navigate = useNavigate();
     const [records, setRecords] = useState<AttendanceRecord[]>([]);
-    const [view, setView] = useState<'list' | 'map' | 'stats' | 'employees' | 'payroll'>('list');
+    // Restore last view from sessionStorage, default to 'list'
+    const savedView = sessionStorage.getItem('admin_last_view') as 'list' | 'map' | 'stats' | 'employees' | 'sedes' | 'payroll' | null;
+    const [view, setView] = useState<'list' | 'map' | 'stats' | 'employees' | 'sedes' | 'payroll'>(savedView || 'list');
     // Close sidebar by default on mobile, open on desktop
     const [isSidebarOpen, setIsSidebarOpen] = useState(window.innerWidth >= 768);
 
     useEffect(() => {
+        // Clear the saved view after restoring it
+        if (savedView) {
+            sessionStorage.removeItem('admin_last_view');
+        }
+
         setRecords(StorageService.getRecords());
 
         // Handle window resize
@@ -60,6 +68,7 @@ export const AdminDashboard: React.FC = () => {
         { id: 'map', label: 'Mapa Tiempo Real', icon: MapIcon },
         { id: 'stats', label: 'Estadísticas', icon: Clock },
         { id: 'employees', label: 'Empleados', icon: Users },
+        { id: 'sedes', label: 'Sedes', icon: Building },
         { id: 'payroll', label: 'Generar Nómina', icon: FileText },
     ] as const;
 
@@ -173,6 +182,8 @@ export const AdminDashboard: React.FC = () => {
                     </header>
 
                     {view === 'employees' && <AdminEmployeeList records={records} />}
+
+                    {view === 'sedes' && <AdminSedeList />}
 
                     {view === 'payroll' && <AdminPayrollView records={records} />}
 

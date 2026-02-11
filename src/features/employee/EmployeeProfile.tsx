@@ -1,25 +1,14 @@
 import React from 'react';
 import type { User } from '../../types';
 import { AuthService } from '../../services/auth';
-import { StorageService } from '../../services/storage';
-import { MapPin, User as UserIcon, Building, RefreshCw } from 'lucide-react';
+import { MapPin, User as UserIcon, Building } from 'lucide-react';
 
 interface EmployeeProfileProps {
     user: User;
 }
 
-import { DateUtils } from '../../utils/date';
-
 export const EmployeeProfile: React.FC<EmployeeProfileProps> = ({ user }) => {
     const sede = AuthService.getSede(user.sedeId);
-
-    const handleResetDay = () => {
-        if (confirm('¿Estás seguro de borrar tu asistencia de hoy para probar de nuevo?')) {
-            const today = DateUtils.getColombiaDate();
-            StorageService.deleteRecordsForUser(user.id, today);
-            window.location.reload();
-        }
-    };
 
     return (
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -76,16 +65,6 @@ export const EmployeeProfile: React.FC<EmployeeProfileProps> = ({ user }) => {
                         <span className="font-medium text-gray-900">****</span>
                     </div>
                 </div>
-            </div>
-
-            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-                <button
-                    onClick={handleResetDay}
-                    className="w-full py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg flex items-center justify-center gap-2 transition-colors"
-                >
-                    <RefreshCw className="w-4 h-4" />
-                    <span>Reiniciar Asistencia de Hoy (Debug)</span>
-                </button>
             </div>
         </div>
     );
