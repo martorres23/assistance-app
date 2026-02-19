@@ -11,6 +11,7 @@ import { EmployeeProfile } from './EmployeeProfile';
 import { EmployeeStatsView } from './EmployeeStatsView';
 import { GeofencingUtils } from '../../utils/geofencing';
 import { DateUtils } from '../../utils/date';
+import { HolidayUtils } from '../../utils/holidays';
 import { MapContainer, TileLayer, Marker, Popup, Circle } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
@@ -156,7 +157,7 @@ export const AttendanceScreen: React.FC = () => {
                         onClick={() => setViewMode('stats')}
                         className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all ${viewMode === 'stats' ? 'bg-white shadow text-blue-600' : 'text-gray-500'}`}
                     >
-                        Mis Estadísticas
+                        Mis Jornadas
                     </button>
                     <button
                         onClick={() => setViewMode('profile')}
@@ -168,6 +169,24 @@ export const AttendanceScreen: React.FC = () => {
 
                 {viewMode === 'action' ? (
                     <div className="w-full">
+                        {/* Recordatorios inteligentes */}
+                        {HolidayUtils.isBusinessDay(new Date()) && !hasClockedIn && (
+                            <motion.div
+                                initial={{ opacity: 0, y: -10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                className="mb-6 bg-white border border-amber-100 p-4 rounded-2xl flex items-center gap-4 shadow-sm"
+                            >
+                                <div className="bg-amber-50 w-12 h-12 rounded-xl flex items-center justify-center text-2xl shadow-inner">
+                                    🧠
+                                </div>
+                                <div className="flex-1">
+                                    <h4 className="text-[10px] font-black text-amber-500 uppercase tracking-wider mb-1">Recordatorios inteligentes</h4>
+                                    <p className="text-sm font-bold text-gray-800 flex items-center gap-2">
+                                        <span className="animate-bounce">🔔</span> “No has marcado tu entrada hoy”
+                                    </p>
+                                </div>
+                            </motion.div>
+                        )}
                         <div className="mb-6 w-full flex flex-col items-center">
                             <GeoLocation onLocationFound={setLocation} />
 
