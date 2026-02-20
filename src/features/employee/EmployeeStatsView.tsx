@@ -38,7 +38,7 @@ export const EmployeeStatsView: React.FC<EmployeeStatsViewProps> = ({ records, u
                             <p className="text-xl font-bold text-gray-800">{data.today.exit || '--:--'}</p>
                         </div>
                         <div className="text-center md:text-left">
-                            <p className="text-xs text-gray-500 uppercase font-semibold">Horas Hoy</p>
+                            <p className="text-xs text-gray-500 uppercase font-semibold">Hoy</p>
                             <p className="text-xl font-bold text-blue-600">{data.today.hours}h</p>
                         </div>
                     </div>
@@ -86,16 +86,16 @@ export const EmployeeStatsView: React.FC<EmployeeStatsViewProps> = ({ records, u
                         {data.calendarDays.map((day) => (
                             <div
                                 key={day.date}
-                                className={`aspect-square rounded-lg flex flex-col items-center justify-center border transition-all shadow-sm ${day.isWorked
+                                className={`aspect-square rounded-lg flex flex-col items-center justify-center border transition-all shadow-sm leading-none ${day.isWorked
                                     ? 'bg-indigo-600 border-indigo-700 text-white'
                                     : !day.isBusinessDay
                                         ? 'bg-gray-200 border-gray-300 text-gray-600' // Weekend/Holiday - darker
                                         : 'bg-gray-50 border-gray-100 text-gray-500' // Normal business day
                                     } ${day.isToday ? 'ring-2 ring-indigo-500 ring-offset-2' : ''}`}
                             >
-                                <span className="text-xs font-bold">{day.dayNum}</span>
+                                <span className="text-xs font-bold mb-0.5">{day.dayNum}</span>
                                 {day.isWorked && (
-                                    <span className="text-[10px] font-black">{day.hours}h</span>
+                                    <span className="text-[9px] font-black tracking-tighter">{day.hours}h</span>
                                 )}
                             </div>
                         ))}
@@ -198,8 +198,12 @@ export const EmployeeStatsView: React.FC<EmployeeStatsViewProps> = ({ records, u
                                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
                                     <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#9ca3af' }} />
                                     <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#9ca3af' }} />
-                                    <Tooltip cursor={{ fill: '#f9fafb' }} contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
-                                    <Bar dataKey="hours" fill="#3b82f6" radius={[6, 6, 0, 0]} barSize={24} />
+                                    <Tooltip
+                                        cursor={{ fill: '#f9fafb' }}
+                                        contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                                        formatter={(val: any) => [`${val}h`, 'Horas']}
+                                    />
+                                    <Bar dataKey="hours" name="Horas" fill="#3b82f6" radius={[6, 6, 0, 0]} barSize={24} />
                                 </BarChart>
                             </ResponsiveContainer>
                         </div>
@@ -217,8 +221,11 @@ export const EmployeeStatsView: React.FC<EmployeeStatsViewProps> = ({ records, u
                                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
                                     <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#9ca3af' }} />
                                     <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#9ca3af' }} />
-                                    <Tooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
-                                    <Line type="monotone" dataKey="hours" stroke="#8b5cf6" strokeWidth={3} dot={false} activeDot={{ r: 6 }} />
+                                    <Tooltip
+                                        contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                                        formatter={(val: any) => [`${val}h`, 'Horas']}
+                                    />
+                                    <Line type="monotone" dataKey="hours" name="Horas" stroke="#8b5cf6" strokeWidth={3} dot={false} activeDot={{ r: 6 }} />
                                 </LineChart>
                             </ResponsiveContainer>
                         </div>

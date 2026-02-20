@@ -86,9 +86,6 @@ export const LoginScreen: React.FC = () => {
                     </button>
                 </form>
 
-                <div className="mt-8 text-center text-xs text-gray-400">
-                    <p>Demo PINs: 1234 (Empleado), admin123 (Admin)</p>
-                </div>
             </motion.div>
         </div>
     );
