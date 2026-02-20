@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { LoginScreen } from './features/auth/LoginScreen';
 import { AttendanceScreen } from './features/employee/AttendanceScreen';
 import { AdminDashboard } from './features/admin/AdminDashboard';
@@ -13,7 +13,7 @@ const PrivateRoute = ({ children, role }: { children: React.ReactNode, role?: 'a
 
 function App() {
   return (
-    <BrowserRouter>
+    <HashRouter>
       <Routes>
         <Route path="/" element={<LoginScreen />} />
         <Route
@@ -34,7 +34,7 @@ function App() {
         />
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>
-    </BrowserRouter>
+    </HashRouter>
   );
 }
 
