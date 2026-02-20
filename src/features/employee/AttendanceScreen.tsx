@@ -26,6 +26,8 @@ let DefaultIcon = L.icon({
 });
 L.Marker.prototype.options.icon = DefaultIcon;
 
+import { ConfirmModal } from '../../components/ui/ConfirmModal';
+
 export const AttendanceScreen: React.FC = () => {
     const navigate = useNavigate();
     const user = AuthService.getCurrentUser();
@@ -37,6 +39,8 @@ export const AttendanceScreen: React.FC = () => {
     const [isLoading, setIsLoading] = useState(true);
     const [assignedSede, setAssignedSede] = useState<Sede | undefined>(undefined);
     const [records, setRecords] = useState<AttendanceRecord[]>([]);
+    const [showSuccessModal, setShowSuccessModal] = useState(false);
+    const [showErrorModal, setShowErrorModal] = useState(false);
 
     // Fetch dependencies
     useEffect(() => {
@@ -105,7 +109,7 @@ export const AttendanceScreen: React.FC = () => {
         const { error } = await StorageService.saveRecord(newRecord);
 
         if (error) {
-            alert('Error al guardar el registro. Intente de nuevo.');
+            setShowErrorModal(true);
             setIsSubmitting(false);
             return;
         }
@@ -124,7 +128,7 @@ export const AttendanceScreen: React.FC = () => {
 
             setStep('type-select');
             setViewMode('stats');
-            alert('Registro guardado exitosamente');
+            setShowSuccessModal(true);
         }, 1000);
     };
 
@@ -249,7 +253,7 @@ export const AttendanceScreen: React.FC = () => {
                                                 </Marker>
                                                 <Circle
                                                     center={[assignedSede.location.lat, assignedSede.location.lng]}
-                                                    radius={100} // 100m zone
+                                                    radius={assignedSede.radiusMeters || 100}
                                                     pathOptions={{ color: isWithinRange ? 'green' : 'red', fillColor: isWithinRange ? 'green' : 'red', fillOpacity: 0.2 }}
                                                 />
                                             </>
@@ -342,6 +346,28 @@ export const AttendanceScreen: React.FC = () => {
                     <EmployeeProfile user={user} />
                 )}
             </main>
+
+            <ConfirmModal
+                isOpen={showSuccessModal}
+                onClose={() => setShowSuccessModal(false)}
+                onConfirm={() => setShowSuccessModal(false)}
+                title="Registro Exitoso"
+                message={`Tu asistencia de ${recordType === 'in' ? 'entrada' : 'salida'} ha sido guardada correctamente.`}
+                confirmText="Entendido"
+                cancelText={null}
+                type="success"
+            />
+
+            <ConfirmModal
+                isOpen={showErrorModal}
+                onClose={() => setShowErrorModal(false)}
+                onConfirm={() => setShowErrorModal(false)}
+                title="Error de Registro"
+                message="Hubo un problema al guardar tu asistencia. Por favor, verifica tu conexión e intenta de nuevo."
+                confirmText="Reintentar"
+                cancelText={null}
+                type="danger"
+            />
         </div>
     );
 };

@@ -33,13 +33,15 @@ export const AdminEmployeeList: React.FC<AdminEmployeeListProps> = ({ records, o
         title: string;
         message: string;
         onConfirm: () => void;
-        type: 'danger' | 'info' | 'warning';
+        type: 'danger' | 'info' | 'warning' | 'success';
+        cancelText?: string | null;
     }>({
         isOpen: false,
         title: '',
         message: '',
         onConfirm: () => { },
-        type: 'info'
+        type: 'info',
+        cancelText: 'Cancelar'
     });
 
     // Fetch data
@@ -81,7 +83,13 @@ export const AdminEmployeeList: React.FC<AdminEmployeeListProps> = ({ records, o
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!formData.name || !formData.pin || !formData.id) {
-            alert('Por favor complete todos los campos (ID, Nombre y PIN)');
+            setConfirmModal({
+                isOpen: true,
+                title: 'Campos Incompletos',
+                message: 'Por favor complete todos los campos (ID, Nombre y PIN)',
+                type: 'warning',
+                onConfirm: () => { },
+            });
             return;
         }
 
@@ -91,7 +99,13 @@ export const AdminEmployeeList: React.FC<AdminEmployeeListProps> = ({ records, o
                 if (editingUser === 'new') {
                     const exists = employees.some(u => u.id === formData.id);
                     if (exists) {
-                        alert('Ya existe un usuario con este ID');
+                        setConfirmModal({
+                            isOpen: true,
+                            title: 'ID Duplicado',
+                            message: 'Ya existe un usuario con este ID',
+                            type: 'danger',
+                            onConfirm: () => { },
+                        });
                         return;
                     }
 
@@ -111,7 +125,13 @@ export const AdminEmployeeList: React.FC<AdminEmployeeListProps> = ({ records, o
                     if (newId !== oldId) {
                         const exists = employees.some(u => u.id === newId);
                         if (exists) {
-                            alert('Ya existe un usuario con este ID');
+                            setConfirmModal({
+                                isOpen: true,
+                                title: 'ID Duplicado',
+                                message: 'Ya existe un usuario con este ID',
+                                type: 'danger',
+                                onConfirm: () => { },
+                            });
                             return;
                         }
                     }
@@ -126,7 +146,13 @@ export const AdminEmployeeList: React.FC<AdminEmployeeListProps> = ({ records, o
                 await fetchData(); // Refresh list
                 onRefreshRecords(); // Refresh history if needed
             } catch (error) {
-                alert('Error al guardar cambios');
+                setConfirmModal({
+                    isOpen: true,
+                    title: 'Error',
+                    message: 'Error al guardar cambios',
+                    type: 'danger',
+                    onConfirm: () => { },
+                });
             } finally {
                 setIsLoading(false);
             }
@@ -158,7 +184,13 @@ export const AdminEmployeeList: React.FC<AdminEmployeeListProps> = ({ records, o
                     await AuthService.deleteUser(id);
                     await fetchData();
                 } catch (error) {
-                    alert('Error al eliminar');
+                    setConfirmModal({
+                        isOpen: true,
+                        title: 'Error',
+                        message: 'Error al eliminar el empleado',
+                        type: 'danger',
+                        onConfirm: () => { },
+                    });
                 } finally {
                     setIsLoading(false);
                 }
@@ -176,11 +208,27 @@ export const AdminEmployeeList: React.FC<AdminEmployeeListProps> = ({ records, o
                 setIsLoading(true);
                 try {
                     const today = DateUtils.getColombiaDate();
-                    await StorageService.deleteRecordsForUser(userId, today);
+                    const { error } = await StorageService.deleteRecordsForUser(userId, today);
+
+                    if (error) throw error;
+
                     onRefreshRecords(); // Refresh global records
-                    alert('Asistencia reiniciada correctamente.');
+                    setConfirmModal({
+                        isOpen: true,
+                        title: 'Reinicio Exitoso',
+                        message: 'La asistencia ha sido reiniciada correctamente.',
+                        type: 'success',
+                        onConfirm: () => { },
+                    });
                 } catch (error) {
-                    alert('Error al reiniciar');
+                    console.error(error);
+                    setConfirmModal({
+                        isOpen: true,
+                        title: 'Error',
+                        message: 'Error al reiniciar la asistencia.',
+                        type: 'danger',
+                        onConfirm: () => { },
+                    });
                 } finally {
                     setIsLoading(false);
                 }

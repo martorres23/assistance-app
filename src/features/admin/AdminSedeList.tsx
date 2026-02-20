@@ -44,13 +44,15 @@ export const AdminSedeList: React.FC = () => {
         title: string;
         message: string;
         onConfirm: () => void;
-        type: 'danger' | 'info' | 'warning';
+        type: 'danger' | 'info' | 'warning' | 'success';
+        cancelText?: string | null;
     }>({
         isOpen: false,
         title: '',
         message: '',
         onConfirm: () => { },
-        type: 'info'
+        type: 'info',
+        cancelText: 'Cancelar'
     });
 
     const fetchSedes = async () => {
@@ -99,7 +101,14 @@ export const AdminSedeList: React.FC = () => {
                         await fetchSedes();
                         setEditingSede(null);
                     } catch (error) {
-                        alert('Error al guardar la sede');
+                        setConfirmModal({
+                            isOpen: true,
+                            title: 'Error',
+                            message: 'No se pudo guardar la sede. Intente de nuevo.',
+                            type: 'danger',
+                            onConfirm: () => { },
+                            cancelText: null
+                        });
                     } finally {
                         setIsLoading(false);
                     }
@@ -124,7 +133,14 @@ export const AdminSedeList: React.FC = () => {
             await fetchSedes();
             setEditingSede(null);
         } catch (error) {
-            alert('Error al guardar la sede');
+            setConfirmModal({
+                isOpen: true,
+                title: 'Error',
+                message: 'No se pudo guardar la sede. Intente de nuevo.',
+                type: 'danger',
+                onConfirm: () => { },
+                cancelText: null
+            });
         } finally {
             setIsLoading(false);
         }
@@ -142,7 +158,14 @@ export const AdminSedeList: React.FC = () => {
                     await AuthService.deleteSede(id);
                     await fetchSedes();
                 } catch (error) {
-                    alert('Error al eliminar la sede');
+                    setConfirmModal({
+                        isOpen: true,
+                        title: 'Error',
+                        message: 'No se pudo eliminar la sede.',
+                        type: 'danger',
+                        onConfirm: () => { },
+                        cancelText: null
+                    });
                 } finally {
                     setIsLoading(false);
                 }

@@ -71,10 +71,17 @@ export const StorageService = {
     },
 
     deleteRecordsForUser: async (userId: string, datePrefix: string): Promise<{ error: any }> => {
-        // En Supabase, filtramos por rango de fecha para el día dado
-        // datePrefix suele ser YYYY-MM-DD
-        const startDate = `${datePrefix}T00:00:00Z`;
-        const endDate = `${datePrefix}T23:59:59Z`;
+        // En Supabase, el timestamp está en UTC.
+        // Colombia está en UTC-5.
+        // El día 'datePrefix' (YYYY-MM-DD) en Colombia:
+        // Inicia: datePrefix T 05:00:00 Z
+        // Termina: (datePrefix + 1 día) T 04:59:59 Z
+
+        const start = new Date(`${datePrefix}T00:00:00`);
+        const startDate = new Date(start.getTime() + (5 * 60 * 60 * 1000)).toISOString();
+
+        const end = new Date(start.getTime() + (24 * 60 * 60 * 1000));
+        const endDate = new Date(end.getTime() + (4 * 60 * 60 * 1000) + (59 * 60 * 1000) + (59 * 1000)).toISOString();
 
         const { error } = await supabase
             .from('attendance_records')

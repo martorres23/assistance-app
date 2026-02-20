@@ -1,5 +1,5 @@
 import React from 'react';
-import { AlertCircle, HelpCircle, X } from 'lucide-react';
+import { AlertCircle, HelpCircle, CheckCircle, X } from 'lucide-react';
 
 interface ConfirmModalProps {
     isOpen: boolean;
@@ -8,8 +8,8 @@ interface ConfirmModalProps {
     title: string;
     message: string;
     confirmText?: string;
-    cancelText?: string;
-    type?: 'danger' | 'info' | 'warning';
+    cancelText?: string | null;
+    type?: 'danger' | 'info' | 'warning' | 'success';
 }
 
 export const ConfirmModal: React.FC<ConfirmModalProps> = ({
@@ -42,6 +42,12 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
             buttonClass: 'bg-amber-600 hover:bg-amber-700 shadow-amber-100',
             iconBg: 'bg-amber-50',
             accent: 'text-amber-600'
+        },
+        success: {
+            icon: <CheckCircle className="w-6 h-6 text-green-500" />,
+            buttonClass: 'bg-green-600 hover:bg-green-700 shadow-green-100',
+            iconBg: 'bg-green-50',
+            accent: 'text-green-600'
         }
     };
 
@@ -84,12 +90,14 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
                     >
                         {confirmText}
                     </button>
-                    <button
-                        onClick={onClose}
-                        className="w-full py-4 rounded-2xl text-gray-500 font-black uppercase tracking-widest text-xs hover:bg-gray-100 transition-all active:scale-95"
-                    >
-                        {cancelText}
-                    </button>
+                    {cancelText !== null && (
+                        <button
+                            onClick={onClose}
+                            className="w-full py-4 rounded-2xl text-gray-500 font-black uppercase tracking-widest text-xs hover:bg-gray-100 transition-all active:scale-95"
+                        >
+                            {cancelText}
+                        </button>
+                    )}
                 </div>
 
                 {/* Close hint (X button optional) */}
