@@ -110,11 +110,21 @@ export const AttendanceScreen: React.FC = () => {
             return;
         }
 
-        // Show success feedback briefly then reset/logout or go to history
-        setTimeout(() => {
+        // Show success feedback briefly then go to history
+        setTimeout(async () => {
             setIsSubmitting(false);
+
+            // Refresh data to show newborn record
+            try {
+                const allRecords = await StorageService.getRecords();
+                setRecords(allRecords);
+            } catch (e) {
+                console.error(e);
+            }
+
+            setStep('type-select');
+            setViewMode('stats');
             alert('Registro guardado exitosamente');
-            handleLogout();
         }, 1000);
     };
 
