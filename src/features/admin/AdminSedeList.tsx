@@ -1,7 +1,33 @@
 import React, { useState, useEffect } from 'react';
 import { AuthService } from '../../services/auth';
 import type { Sede } from '../../types';
-import { MapPin, Plus, Trash2, Building, Navigation, Edit2 } from 'lucide-react';
+import { MapPin, Plus, Trash2, Building, Navigation, Edit2, Map as MapIcon } from 'lucide-react';
+import { MapContainer, TileLayer, Marker, useMapEvents } from 'react-leaflet';
+import L from 'leaflet';
+import { ConfirmModal } from '../../components/ui/ConfirmModal';
+
+// Fix for default marker icon in Leaflet
+import markerIcon from 'leaflet/dist/images/marker-icon.png';
+import markerShadow from 'leaflet/dist/images/marker-shadow.png';
+
+let DefaultIcon = L.icon({
+    iconUrl: markerIcon,
+    shadowUrl: markerShadow,
+    iconSize: [25, 41],
+    iconAnchor: [12, 41]
+});
+
+L.Marker.prototype.options.icon = DefaultIcon;
+
+// Internal component to handle map clicks and update marker
+const MapClickHandler = ({ onLocationSelect }: { onLocationSelect: (lat: number, lng: number) => void }) => {
+    useMapEvents({
+        click(e) {
+            onLocationSelect(e.latlng.lat, e.latlng.lng);
+        },
+    });
+    return null;
+};
 
 export const AdminSedeList: React.FC = () => {
     const [sedes, setSedes] = useState<Sede[]>([]);
@@ -12,6 +38,19 @@ export const AdminSedeList: React.FC = () => {
         address: '',
         location: { lat: 0, lng: 0 },
         radiusMeters: 100
+    });
+    const [confirmModal, setConfirmModal] = useState<{
+        isOpen: boolean;
+        title: string;
+        message: string;
+        onConfirm: () => void;
+        type: 'danger' | 'info' | 'warning';
+    }>({
+        isOpen: false,
+        title: '',
+        message: '',
+        onConfirm: () => { },
+        type: 'info'
     });
 
     const fetchSedes = async () => {
@@ -43,6 +82,32 @@ export const AdminSedeList: React.FC = () => {
         e.preventDefault();
         if (!formData.name || !formData.address) return;
 
+        // Add confirmation for updates
+        if (editingSede !== 'new' && editingSede !== null) {
+            setConfirmModal({
+                isOpen: true,
+                title: 'Actualizar Sede',
+                message: '¿Confirma que desea actualizar los datos de esta sede?',
+                type: 'info',
+                onConfirm: async () => {
+                    setIsLoading(true);
+                    try {
+                        await AuthService.updateSede({
+                            ...editingSede,
+                            ...formData
+                        } as Sede);
+                        await fetchSedes();
+                        setEditingSede(null);
+                    } catch (error) {
+                        alert('Error al guardar la sede');
+                    } finally {
+                        setIsLoading(false);
+                    }
+                }
+            });
+            return;
+        }
+
         setIsLoading(true);
         try {
             if (editingSede === 'new') {
@@ -54,11 +119,6 @@ export const AdminSedeList: React.FC = () => {
                     radiusMeters: formData.radiusMeters || 100
                 };
                 await AuthService.addSede(sedeToAdd);
-            } else if (editingSede) {
-                await AuthService.updateSede({
-                    ...editingSede,
-                    ...formData
-                } as Sede);
             }
 
             await fetchSedes();
@@ -71,17 +131,23 @@ export const AdminSedeList: React.FC = () => {
     };
 
     const handleDelete = async (id: string) => {
-        if (confirm('¿Confirma que desea eliminar esta sede?')) {
-            setIsLoading(true);
-            try {
-                await AuthService.deleteSede(id);
-                await fetchSedes();
-            } catch (error) {
-                alert('Error al eliminar la sede');
-            } finally {
-                setIsLoading(false);
+        setConfirmModal({
+            isOpen: true,
+            title: 'Eliminar Sede',
+            message: '¿Confirma que desea eliminar esta sede? Esta acción no se puede deshacer.',
+            type: 'danger',
+            onConfirm: async () => {
+                setIsLoading(true);
+                try {
+                    await AuthService.deleteSede(id);
+                    await fetchSedes();
+                } catch (error) {
+                    alert('Error al eliminar la sede');
+                } finally {
+                    setIsLoading(false);
+                }
             }
-        }
+        });
     };
 
     if (isLoading && sedes.length === 0) {
@@ -116,34 +182,34 @@ export const AdminSedeList: React.FC = () => {
                             {editingSede === 'new' ? 'Agregar Nueva Sede' : 'Editar Sede'}
                         </h3>
                         <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-6 gap-6">
-                            <div className="md:col-span-3 flex flex-col gap-1">
-                                <label className="text-xs font-semibold text-gray-500 ml-1">Nombre de la Sede</label>
+                            <div className="md:col-span-3 flex flex-col gap-1.5">
+                                <label className="text-[10px] font-black text-gray-500 uppercase tracking-wider ml-1">Nombre de la Sede</label>
                                 <input
-                                    placeholder="Nombre de la sede"
-                                    className="p-3 border rounded-lg outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                                    placeholder="Ej: Sede Norte"
+                                    className="p-3 border border-gray-200 rounded-xl outline-none focus:ring-4 focus:ring-blue-100 focus:border-blue-400 bg-white transition-all font-medium"
                                     value={formData.name}
                                     onChange={e => setFormData({ ...formData, name: e.target.value })}
                                     required
                                 />
                             </div>
-                            <div className="md:col-span-3 flex flex-col gap-1">
-                                <label className="text-xs font-semibold text-gray-500 ml-1">Dirección</label>
+                            <div className="md:col-span-3 flex flex-col gap-1.5">
+                                <label className="text-[10px] font-black text-gray-500 uppercase tracking-wider ml-1">Dirección Completa</label>
                                 <input
-                                    placeholder="Dirección"
-                                    className="p-3 border rounded-lg outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                                    placeholder="Calle 123 #45-67"
+                                    className="p-3 border border-gray-200 rounded-xl outline-none focus:ring-4 focus:ring-blue-100 focus:border-blue-400 bg-white transition-all font-medium"
                                     value={formData.address}
                                     onChange={e => setFormData({ ...formData, address: e.target.value })}
                                     required
                                 />
                             </div>
 
-                            <div className="md:col-span-2 flex flex-col gap-1">
-                                <label className="text-xs font-semibold text-gray-500 ml-1">Latitud</label>
+                            <div className="md:col-span-2 flex flex-col gap-1.5">
+                                <label className="text-[10px] font-black text-gray-500 uppercase tracking-wider ml-1">Latitud Gps</label>
                                 <input
                                     type="number"
                                     step="any"
-                                    placeholder="Latitud"
-                                    className="p-3 border rounded-lg outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                                    placeholder="0.000000"
+                                    className="p-3 border border-gray-200 rounded-xl outline-none focus:ring-4 focus:ring-blue-100 focus:border-blue-400 bg-white transition-all font-mono"
                                     value={formData.location?.lat || ''}
                                     onChange={e => setFormData({
                                         ...formData,
@@ -153,13 +219,13 @@ export const AdminSedeList: React.FC = () => {
                                 />
                             </div>
 
-                            <div className="md:col-span-2 flex flex-col gap-1">
-                                <label className="text-xs font-semibold text-gray-500 ml-1">Longitud</label>
+                            <div className="md:col-span-2 flex flex-col gap-1.5">
+                                <label className="text-[10px] font-black text-gray-500 uppercase tracking-wider ml-1">Longitud Gps</label>
                                 <input
                                     type="number"
                                     step="any"
-                                    placeholder="Longitud"
-                                    className="p-3 border rounded-lg outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                                    placeholder="0.000000"
+                                    className="p-3 border border-gray-200 rounded-xl outline-none focus:ring-4 focus:ring-blue-100 focus:border-blue-400 bg-white transition-all font-mono"
                                     value={formData.location?.lng || ''}
                                     onChange={e => setFormData({
                                         ...formData,
@@ -169,16 +235,38 @@ export const AdminSedeList: React.FC = () => {
                                 />
                             </div>
 
-                            <div className="md:col-span-2 flex flex-col gap-1">
-                                <label className="text-xs font-semibold text-gray-500 ml-1">Radio Geocerca (m)</label>
+                            <div className="md:col-span-2 flex flex-col gap-1.5">
+                                <label className="text-[10px] font-black text-gray-500 uppercase tracking-wider ml-1">Perímetro (Metros)</label>
                                 <input
                                     type="number"
-                                    placeholder="Ej: 100"
-                                    className="p-3 border rounded-lg outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                                    placeholder="Ej: 50"
+                                    className="p-3 border border-gray-200 rounded-xl outline-none focus:ring-4 focus:ring-blue-100 focus:border-blue-400 bg-white transition-all font-medium"
                                     value={formData.radiusMeters || ''}
                                     onChange={e => setFormData({ ...formData, radiusMeters: parseInt(e.target.value) })}
                                     required
                                 />
+                            </div>
+
+                            <div className="md:col-span-6 space-y-2">
+                                <label className="text-[10px] font-black text-gray-500 uppercase tracking-wider ml-1 flex items-center gap-1">
+                                    <MapIcon className="w-3.5 h-3.5" />
+                                    Ubicación Geográfica (Clic para ajustar pin)
+                                </label>
+                                <div className="h-64 rounded-2xl overflow-hidden border border-gray-200 shadow-inner bg-gray-100 relative group/map">
+                                    <MapContainer
+                                        center={[formData.location?.lat || 0, formData.location?.lng || 0]}
+                                        zoom={15}
+                                        style={{ height: '100%', width: '100%' }}
+                                    >
+                                        <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+                                        <Marker position={[formData.location?.lat || 0, formData.location?.lng || 0]} />
+                                        <MapClickHandler onLocationSelect={(lat, lng) => setFormData({ ...formData, location: { lat, lng } })} />
+                                    </MapContainer>
+                                    <div className="absolute bottom-4 left-4 z-[400] bg-white/90 backdrop-blur px-3 py-1.5 rounded-full text-[10px] font-black uppercase text-blue-600 shadow-sm border border-blue-100 flex items-center gap-2">
+                                        <div className="w-2 h-2 bg-blue-600 rounded-full animate-pulse" />
+                                        Pin Interactivo
+                                    </div>
+                                </div>
                             </div>
 
                             <div className="md:col-span-6 flex justify-end gap-2 border-t pt-4 mt-2">
@@ -250,6 +338,15 @@ export const AdminSedeList: React.FC = () => {
                     </div>
                 )}
             </div>
+
+            <ConfirmModal
+                isOpen={confirmModal.isOpen}
+                onClose={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+                onConfirm={confirmModal.onConfirm}
+                title={confirmModal.title}
+                message={confirmModal.message}
+                type={confirmModal.type}
+            />
         </div>
     );
 };

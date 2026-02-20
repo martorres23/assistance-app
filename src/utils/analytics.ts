@@ -1,4 +1,4 @@
-import type { AttendanceRecord } from '../types';
+import type { AttendanceRecord, User } from '../types';
 import { HolidayUtils } from './holidays';
 
 export interface DailyStats {
@@ -49,6 +49,20 @@ export interface DashboardData {
         isBusinessDay: boolean;
     }[];
 }
+
+export interface AttendanceSession {
+    userId: string;
+    userName: string;
+    date: string;
+    status: 'En curso' | 'Finalizada' | 'No ha iniciado';
+    entry: string | null;
+    exit: string | null;
+    entryRecord?: AttendanceRecord;
+    exitRecord?: AttendanceRecord;
+    hours: number;
+}
+
+export interface AdminTodayAttendance extends AttendanceSession { }
 
 export const AnalyticsUtils = {
     getDashboardData: (records: AttendanceRecord[], userId: string): DashboardData => {
@@ -376,5 +390,79 @@ export const AnalyticsUtils = {
             count: day.hours,
             intensity: Math.min(4, Math.ceil((day.hours / maxHours) * 4)) // 0-4 scale
         }));
+    },
+
+    getAttendanceSessions: (records: AttendanceRecord[], user: User): AttendanceSession[] => {
+        // Group records by date (Bogota)
+        const recordsByDate: { [date: string]: AttendanceRecord[] } = {};
+
+        records.forEach(r => {
+            const dateStr = new Date(r.timestamp).toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
+            if (!recordsByDate[dateStr]) recordsByDate[dateStr] = [];
+            recordsByDate[dateStr].push(r);
+        });
+
+        const sessions: AttendanceSession[] = Object.keys(recordsByDate).sort((a, b) => b.localeCompare(a)).map(dateStr => {
+            const dayRecords = recordsByDate[dateStr].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+
+            const entry = dayRecords.find(r => r.type === 'in');
+            const exit = dayRecords.find(r => r.type === 'out');
+
+            let hours = 0;
+            let status: 'En curso' | 'Finalizada' = 'En curso';
+
+            if (entry && exit) {
+                hours = (new Date(exit.timestamp).getTime() - new Date(entry.timestamp).getTime()) / (1000 * 60 * 60);
+                status = 'Finalizada';
+            } else if (entry) {
+                const now = new Date();
+                const isToday = now.toLocaleDateString('en-CA', { timeZone: 'America/Bogota' }) === dateStr;
+                if (isToday) {
+                    hours = (now.getTime() - new Date(entry.timestamp).getTime()) / (1000 * 60 * 60);
+                }
+                status = 'En curso';
+            }
+
+            return {
+                userId: user.id,
+                userName: user.name,
+                date: dateStr,
+                status,
+                entry: entry ? new Date(entry.timestamp).toLocaleTimeString('es-CO', { timeZone: 'America/Bogota', hour: '2-digit', minute: '2-digit' }) : null,
+                exit: exit ? new Date(exit.timestamp).toLocaleTimeString('es-CO', { timeZone: 'America/Bogota', hour: '2-digit', minute: '2-digit' }) : null,
+                entryRecord: entry,
+                exitRecord: exit,
+                hours: Number(hours.toFixed(1))
+            };
+        });
+
+        return sessions;
+    },
+
+    getAdminTodaySummary: (records: AttendanceRecord[], allUsers: User[]): AdminTodayAttendance[] => {
+        const now = new Date();
+        const colombiaDate = now.toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
+
+        const todayRecords = records.filter(r =>
+            new Date(r.timestamp).toLocaleDateString('en-CA', { timeZone: 'America/Bogota' }) === colombiaDate
+        );
+
+        return allUsers.map(user => {
+            const userTodaySessions = AnalyticsUtils.getAttendanceSessions(todayRecords.filter(r => r.userId === user.id), user);
+
+            if (userTodaySessions.length > 0) {
+                return userTodaySessions[0];
+            }
+
+            return {
+                userId: user.id,
+                userName: user.name,
+                date: colombiaDate,
+                status: 'No ha iniciado',
+                entry: null,
+                exit: null,
+                hours: 0
+            };
+        });
     }
 };

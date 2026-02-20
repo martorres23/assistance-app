@@ -1,9 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { AuthService } from '../../services/auth';
 import { StorageService } from '../../services/storage';
-import { MapPin, User as UserIcon, Hash, ChevronLeft, Clock, Plus, Trash2, RefreshCw, Edit2 } from 'lucide-react';
+import { MapPin, User as UserIcon, Hash, ChevronLeft, Plus, Trash2, RefreshCw, Edit2 } from 'lucide-react';
 import type { AttendanceRecord, User, Sede } from '../../types';
 import { DateUtils } from '../../utils/date';
+import { AnalyticsUtils, type AttendanceSession } from '../../utils/analytics';
+import { AttendanceDetailView } from './AttendanceDetailView';
+import { ConfirmModal } from '../../components/ui/ConfirmModal';
 
 interface AdminEmployeeListProps {
     records: AttendanceRecord[];
@@ -24,6 +27,20 @@ export const AdminEmployeeList: React.FC<AdminEmployeeListProps> = ({ records, o
         sedeId: ''
     });
     const [selectedPhoto, setSelectedPhoto] = useState<string | null>(null);
+    const [selectedSession, setSelectedSession] = useState<AttendanceSession | null>(null);
+    const [confirmModal, setConfirmModal] = useState<{
+        isOpen: boolean;
+        title: string;
+        message: string;
+        onConfirm: () => void;
+        type: 'danger' | 'info' | 'warning';
+    }>({
+        isOpen: false,
+        title: '',
+        message: '',
+        onConfirm: () => { },
+        type: 'info'
+    });
 
     // Fetch data
     const fetchData = async () => {
@@ -68,81 +85,107 @@ export const AdminEmployeeList: React.FC<AdminEmployeeListProps> = ({ records, o
             return;
         }
 
-        setIsLoading(true);
-        try {
-            if (editingUser === 'new') {
-                const exists = employees.some(u => u.id === formData.id);
-                if (exists) {
-                    alert('Ya existe un usuario con este ID');
-                    return;
-                }
-
-                const userToAdd: User = {
-                    id: formData.id!,
-                    name: formData.name!,
-                    role: 'employee',
-                    pin: formData.pin!,
-                    sedeId: formData.sedeId
-                };
-                await AuthService.addUser(userToAdd);
-            } else if (editingUser && typeof editingUser !== 'string') {
-                const oldId = editingUser.id;
-                const newId = formData.id!;
-
-                // If ID is changing, validate new ID doesn't exist
-                if (newId !== oldId) {
-                    const exists = employees.some(u => u.id === newId);
+        const performSave = async () => {
+            setIsLoading(true);
+            try {
+                if (editingUser === 'new') {
+                    const exists = employees.some(u => u.id === formData.id);
                     if (exists) {
                         alert('Ya existe un usuario con este ID');
                         return;
                     }
+
+                    const userToAdd: User = {
+                        id: formData.id!,
+                        name: formData.name!,
+                        role: 'employee',
+                        pin: formData.pin!,
+                        sedeId: formData.sedeId
+                    };
+                    await AuthService.addUser(userToAdd);
+                } else if (editingUser && typeof editingUser !== 'string') {
+                    const oldId = editingUser.id;
+                    const newId = formData.id!;
+
+                    // If ID is changing, validate new ID doesn't exist
+                    if (newId !== oldId) {
+                        const exists = employees.some(u => u.id === newId);
+                        if (exists) {
+                            alert('Ya existe un usuario con este ID');
+                            return;
+                        }
+                    }
+
+                    await AuthService.updateUser({
+                        ...editingUser,
+                        ...formData
+                    } as User, oldId);
                 }
 
-                await AuthService.updateUser({
-                    ...editingUser,
-                    ...formData
-                } as User, oldId);
+                setEditingUser(null);
+                await fetchData(); // Refresh list
+                onRefreshRecords(); // Refresh history if needed
+            } catch (error) {
+                alert('Error al guardar cambios');
+            } finally {
+                setIsLoading(false);
             }
+        };
 
-            setEditingUser(null);
-            await fetchData(); // Refresh list
-            onRefreshRecords(); // Refresh history if needed
-        } catch (error) {
-            alert('Error al guardar cambios');
-        } finally {
-            setIsLoading(false);
+        if (editingUser !== 'new' && editingUser !== null) {
+            setConfirmModal({
+                isOpen: true,
+                title: 'Actualizar Empleado',
+                message: '¿Confirma que desea guardar los cambios realizados en el perfil del empleado?',
+                type: 'info',
+                onConfirm: performSave
+            });
+        } else {
+            performSave();
         }
     };
 
     const handleDeleteUser = async (id: string, e: React.MouseEvent) => {
         e.stopPropagation();
-        if (confirm('¿Confirma que desea eliminar este empleado?')) {
-            setIsLoading(true);
-            try {
-                await AuthService.deleteUser(id);
-                await fetchData();
-            } catch (error) {
-                alert('Error al eliminar');
-            } finally {
-                setIsLoading(false);
+        setConfirmModal({
+            isOpen: true,
+            title: 'Eliminar Empleado',
+            message: '¿Confirma que desea eliminar este empleado? Esta acción no se puede deshacer y borrará su acceso.',
+            type: 'danger',
+            onConfirm: async () => {
+                setIsLoading(true);
+                try {
+                    await AuthService.deleteUser(id);
+                    await fetchData();
+                } catch (error) {
+                    alert('Error al eliminar');
+                } finally {
+                    setIsLoading(false);
+                }
             }
-        }
+        });
     };
 
     const handleResetAttendance = async (userId: string) => {
-        if (confirm('¿Desea reiniciar la asistencia de hoy para este empleado?')) {
-            setIsLoading(true);
-            try {
-                const today = DateUtils.getColombiaDate();
-                await StorageService.deleteRecordsForUser(userId, today);
-                onRefreshRecords(); // Refresh global records
-                alert('Asistencia reiniciada correctamente.');
-            } catch (error) {
-                alert('Error al reiniciar');
-            } finally {
-                setIsLoading(false);
+        setConfirmModal({
+            isOpen: true,
+            title: 'Reiniciar Asistencia',
+            message: '¿Desea reiniciar la asistencia de hoy para este empleado? Esto permitirá que el empleado vuelva a registrar su entrada.',
+            type: 'warning',
+            onConfirm: async () => {
+                setIsLoading(true);
+                try {
+                    const today = DateUtils.getColombiaDate();
+                    await StorageService.deleteRecordsForUser(userId, today);
+                    onRefreshRecords(); // Refresh global records
+                    alert('Asistencia reiniciada correctamente.');
+                } catch (error) {
+                    alert('Error al reiniciar');
+                } finally {
+                    setIsLoading(false);
+                }
             }
-        }
+        });
     };
 
     if (isLoading) {
@@ -160,7 +203,17 @@ export const AdminEmployeeList: React.FC<AdminEmployeeListProps> = ({ records, o
                 // Details View
                 (() => {
                     const employee = employees.find(e => e.id === selectedEmployeeId);
-                    const employeeRecords = records.filter(r => r.userId === selectedEmployeeId).sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+                    const employeeRecords = records.filter(r => r.userId === selectedEmployeeId);
+                    const sessions = employee ? AnalyticsUtils.getAttendanceSessions(employeeRecords, employee) : [];
+
+                    if (selectedSession) {
+                        return (
+                            <AttendanceDetailView
+                                session={selectedSession}
+                                onBack={() => setSelectedSession(null)}
+                            />
+                        );
+                    }
 
                     return (
                         <div className="space-y-6">
@@ -215,32 +268,54 @@ export const AdminEmployeeList: React.FC<AdminEmployeeListProps> = ({ records, o
                                 <h3 className="text-lg font-semibold p-4 bg-gray-50 border-b border-gray-200">
                                     Historial de Asistencia
                                 </h3>
-                                {employeeRecords.length === 0 ? (
+                                {sessions.length === 0 ? (
                                     <p className="p-8 text-center text-gray-500">No hay registros de asistencia</p>
                                 ) : (
-                                    <div className="divide-y divide-gray-100">
-                                        {employeeRecords.map(record => (
-                                            <div key={record.id} className="p-4 flex items-center justify-between hover:bg-gray-50">
-                                                <div className="flex items-center gap-4">
-                                                    <div className={`w-2 h-2 rounded-full ${record.type === 'in' ? 'bg-green-500' : 'bg-red-500'}`}></div>
-                                                    <div>
-                                                        <p className="font-medium capitalize">{record.type === 'in' ? 'Entrada' : 'Salida'}</p>
-                                                        <p className="text-xs text-gray-500 flex items-center gap-1">
-                                                            <Clock className="w-3 h-3" />
-                                                            {new Date(record.timestamp).toLocaleString()}
-                                                        </p>
-                                                    </div>
-                                                </div>
-                                                {record.photoUrl && (
-                                                    <img
-                                                        src={record.photoUrl}
-                                                        alt="Evidence"
-                                                        className="w-12 h-12 rounded object-cover cursor-pointer hover:opacity-80 transition-opacity"
-                                                        onClick={() => setSelectedPhoto(record.photoUrl || null)}
-                                                    />
-                                                )}
-                                            </div>
-                                        ))}
+                                    <div className="overflow-x-auto">
+                                        <table className="w-full text-left border-collapse">
+                                            <thead>
+                                                <tr className="bg-gray-50/50 border-b border-gray-100 text-[10px] font-black uppercase text-gray-400">
+                                                    <th className="px-6 py-3 font-black">Fecha</th>
+                                                    <th className="px-6 py-3 font-black">Entrada</th>
+                                                    <th className="px-6 py-3 font-black">Salida</th>
+                                                    <th className="px-6 py-3 font-black text-right">Tiempo</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-gray-50">
+                                                {sessions.map(session => (
+                                                    <tr
+                                                        key={session.date}
+                                                        className="hover:bg-blue-50/50 cursor-pointer transition-colors group"
+                                                        onClick={() => setSelectedSession(session)}
+                                                    >
+                                                        <td className="px-6 py-4">
+                                                            <div className="flex flex-col">
+                                                                <span className="font-bold text-gray-700">
+                                                                    {new Date(session.date + 'T00:00:00').toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric' })}
+                                                                </span>
+                                                                <span className="text-[10px] text-gray-400 font-bold uppercase">
+                                                                    {new Date(session.date + 'T00:00:00').toLocaleDateString('es-CO', { weekday: 'long' })}
+                                                                </span>
+                                                            </div>
+                                                        </td>
+                                                        <td className="px-6 py-4 font-medium text-gray-600">
+                                                            {session.entry || '—'}
+                                                        </td>
+                                                        <td className="px-6 py-4 text-gray-600 font-medium">
+                                                            <div className="flex items-center justify-between">
+                                                                <span>{session.exit || '—'}</span>
+                                                                <span className="text-[10px] text-blue-500 font-bold opacity-0 group-hover:opacity-100 transition-opacity">
+                                                                    Ver detalle →
+                                                                </span>
+                                                            </div>
+                                                        </td>
+                                                        <td className="px-6 py-4 text-right font-black text-gray-900 font-mono">
+                                                            {session.hours}h
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
                                     </div>
                                 )}
                             </div>
@@ -269,52 +344,64 @@ export const AdminEmployeeList: React.FC<AdminEmployeeListProps> = ({ records, o
                             <h3 className="font-bold text-gray-800 mb-4">
                                 {editingUser === 'new' ? 'Nuevo Empleado' : 'Editar Empleado'}
                             </h3>
-                            <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <input
-                                    placeholder="ID de empleado"
-                                    className="p-3 border rounded-lg outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-                                    value={formData.id}
-                                    onChange={e => setFormData({ ...formData, id: e.target.value })}
-                                    required
-                                />
-                                <input
-                                    placeholder="Nombre completo"
-                                    className="p-3 border rounded-lg outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-                                    value={formData.name}
-                                    onChange={e => setFormData({ ...formData, name: e.target.value })}
-                                    required
-                                />
-                                <input
-                                    placeholder="PIN de acceso"
-                                    className="p-3 border rounded-lg outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-                                    value={formData.pin}
-                                    onChange={e => setFormData({ ...formData, pin: e.target.value })}
-                                    required
-                                />
-                                <select
-                                    className="p-3 border rounded-lg outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-                                    value={formData.sedeId}
-                                    onChange={e => setFormData({ ...formData, sedeId: e.target.value })}
-                                    required
-                                >
-                                    <option value="">Seleccione una sede</option>
-                                    {sedes.map(s => (
-                                        <option key={s.id} value={s.id}>{s.name}</option>
-                                    ))}
-                                </select>
-                                <div className="flex justify-end gap-2 md:col-span-2">
+                            <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div className="flex flex-col gap-1.5">
+                                    <label className="text-[10px] font-black text-gray-500 uppercase tracking-wider ml-1">ID de Empleado</label>
+                                    <input
+                                        placeholder="Ej: 12345678"
+                                        className="p-3 border border-gray-200 rounded-xl outline-none focus:ring-4 focus:ring-blue-100 focus:border-blue-400 bg-white transition-all font-mono"
+                                        value={formData.id}
+                                        onChange={e => setFormData({ ...formData, id: e.target.value })}
+                                        required
+                                    />
+                                </div>
+                                <div className="flex flex-col gap-1.5">
+                                    <label className="text-[10px] font-black text-gray-500 uppercase tracking-wider ml-1">Nombre Completo</label>
+                                    <input
+                                        placeholder="Ej: Juan Pérez"
+                                        className="p-3 border border-gray-200 rounded-xl outline-none focus:ring-4 focus:ring-blue-100 focus:border-blue-400 bg-white transition-all font-medium"
+                                        value={formData.name}
+                                        onChange={e => setFormData({ ...formData, name: e.target.value })}
+                                        required
+                                    />
+                                </div>
+                                <div className="flex flex-col gap-1.5">
+                                    <label className="text-[10px] font-black text-gray-500 uppercase tracking-wider ml-1">PIN de Acceso (4 dígitos)</label>
+                                    <input
+                                        placeholder="Ej: 1234"
+                                        className="p-3 border border-gray-200 rounded-xl outline-none focus:ring-4 focus:ring-blue-100 focus:border-blue-400 bg-white transition-all font-mono"
+                                        value={formData.pin}
+                                        onChange={e => setFormData({ ...formData, pin: e.target.value })}
+                                        required
+                                    />
+                                </div>
+                                <div className="flex flex-col gap-1.5">
+                                    <label className="text-[10px] font-black text-gray-500 uppercase tracking-wider ml-1">Sede de Trabajo</label>
+                                    <select
+                                        className="p-3 border border-gray-200 rounded-xl outline-none focus:ring-4 focus:ring-blue-100 focus:border-blue-400 bg-white transition-all font-medium appearance-none"
+                                        value={formData.sedeId}
+                                        onChange={e => setFormData({ ...formData, sedeId: e.target.value })}
+                                        required
+                                    >
+                                        <option value="">Seleccione una sede</option>
+                                        {sedes.map(s => (
+                                            <option key={s.id} value={s.id}>{s.name}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div className="flex justify-end gap-2 md:col-span-2 border-t pt-4 mt-2">
                                     <button
                                         type="button"
                                         onClick={() => setEditingUser(null)}
-                                        className="px-4 py-2 text-gray-500 hover:bg-gray-200 rounded-lg"
+                                        className="px-4 py-2 text-gray-500 hover:bg-gray-200 rounded-lg font-bold"
                                     >
                                         Cancelar
                                     </button>
                                     <button
                                         type="submit"
-                                        className="px-6 py-2 bg-blue-600 text-white rounded-lg font-bold shadow-sm"
+                                        className="px-6 py-2 bg-blue-600 text-white rounded-lg font-extrabold shadow-lg shadow-blue-100 hover:bg-blue-700 transition-all active:scale-95"
                                     >
-                                        {editingUser === 'new' ? 'Guardar' : 'Actualizar'}
+                                        {editingUser === 'new' ? 'Guardar Empleado' : 'Actualizar Perfil'}
                                     </button>
                                 </div>
                             </form>
@@ -411,6 +498,15 @@ export const AdminEmployeeList: React.FC<AdminEmployeeListProps> = ({ records, o
                     </div>
                 </div>
             )}
+
+            <ConfirmModal
+                isOpen={confirmModal.isOpen}
+                onClose={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+                onConfirm={confirmModal.onConfirm}
+                title={confirmModal.title}
+                message={confirmModal.message}
+                type={confirmModal.type}
+            />
         </div>
     );
 };
