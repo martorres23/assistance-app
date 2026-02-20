@@ -218,7 +218,7 @@ export const AdminDashboard: React.FC = () => {
                         />
                     )}
 
-                    {view === 'sedes' && <AdminSedeList />}
+                    {view === 'sedes' && <AdminSedeList users={users} />}
 
                     {view === 'payroll' && <AdminPayrollView records={records} />}
 

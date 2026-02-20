@@ -188,14 +188,10 @@ export const AttendanceScreen: React.FC = () => {
                             <motion.div
                                 initial={{ opacity: 0, y: -10 }}
                                 animate={{ opacity: 1, y: 0 }}
-                                className="mb-6 bg-white border border-amber-100 p-4 rounded-2xl flex items-center gap-4 shadow-sm"
+                                className="mb-6 bg-white border border-amber-100 p-4 rounded-2xl flex items-center shadow-sm"
                             >
-                                <div className="bg-amber-50 w-12 h-12 rounded-xl flex items-center justify-center text-2xl shadow-inner">
-                                    🧠
-                                </div>
                                 <div className="flex-1">
-                                    <h4 className="text-[10px] font-black text-amber-500 uppercase tracking-wider mb-1">Recordatorios inteligentes</h4>
-                                    <p className="text-sm font-bold text-gray-800 flex items-center gap-2">
+                                    <p className="text-sm font-bold text-gray-800 flex items-center justify-center gap-2">
                                         <span className="animate-bounce">🔔</span> “No has marcado tu entrada hoy”
                                     </p>
                                 </div>
@@ -288,13 +284,13 @@ export const AttendanceScreen: React.FC = () => {
 
                                     <button
                                         onClick={() => handleTypeSelect('out')}
-                                        disabled={!location || !isWithinRange || hasClockedOut}
+                                        disabled={!location || !isWithinRange || hasClockedOut || !hasClockedIn}
                                         className="w-full p-6 bg-red-500 text-white rounded-2xl shadow-lg shadow-red-200 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-between"
                                     >
                                         <div className="text-left">
                                             <span className="block text-2xl font-bold">Marcar Salida</span>
                                             <span className="text-red-100 text-sm">
-                                                {hasClockedOut ? 'Ya registrado hoy' : 'Finalizar jornada'}
+                                                {!hasClockedIn ? 'Primero debes marcar entrada' : hasClockedOut ? 'Ya registrado hoy' : 'Finalizar jornada'}
                                             </span>
                                         </div>
                                         <LogOut className="w-8 h-8 text-white/80" />

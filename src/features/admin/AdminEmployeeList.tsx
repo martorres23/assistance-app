@@ -181,13 +181,19 @@ export const AdminEmployeeList: React.FC<AdminEmployeeListProps> = ({ records, o
             onConfirm: async () => {
                 setIsLoading(true);
                 try {
-                    await AuthService.deleteUser(id);
+                    // Force delete: first delete all attendance records
+                    await StorageService.deleteAllRecordsForUser(id);
+
+                    // Then delete the user
+                    const { error } = await AuthService.deleteUser(id);
+                    if (error) throw error;
+
                     await fetchData();
-                } catch (error) {
+                } catch (error: any) {
                     setConfirmModal({
                         isOpen: true,
                         title: 'Error',
-                        message: 'Error al eliminar el empleado',
+                        message: error.message || 'Error al eliminar el empleado',
                         type: 'danger',
                         onConfirm: () => { },
                     });

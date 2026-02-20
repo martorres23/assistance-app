@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { AuthService } from '../../services/auth';
-import type { Sede } from '../../types';
+import { StorageService } from '../../services/storage';
+import type { Sede, User } from '../../types';
 import { MapPin, Plus, Trash2, Building, Navigation, Edit2, Map as MapIcon } from 'lucide-react';
 import { MapContainer, TileLayer, Marker, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
@@ -29,7 +30,11 @@ const MapClickHandler = ({ onLocationSelect }: { onLocationSelect: (lat: number,
     return null;
 };
 
-export const AdminSedeList: React.FC = () => {
+interface AdminSedeListProps {
+    users?: User[];
+}
+
+export const AdminSedeList: React.FC<AdminSedeListProps> = ({ users = [] }) => {
     const [sedes, setSedes] = useState<Sede[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [editingSede, setEditingSede] = useState<Sede | 'new' | null>(null);
@@ -155,13 +160,26 @@ export const AdminSedeList: React.FC = () => {
             onConfirm: async () => {
                 setIsLoading(true);
                 try {
-                    await AuthService.deleteSede(id);
+                    // Force delete: 
+                    // 1. Get all users for this sede
+                    const sedeUsers = users.filter(u => u.sedeId === id);
+
+                    // 2. Delete all records and users for this sede
+                    for (const user of sedeUsers) {
+                        await StorageService.deleteAllRecordsForUser(user.id);
+                        await AuthService.deleteUser(user.id);
+                    }
+
+                    // 3. Finally delete the sede
+                    const { error } = await AuthService.deleteSede(id);
+                    if (error) throw error;
+
                     await fetchSedes();
-                } catch (error) {
+                } catch (error: any) {
                     setConfirmModal({
                         isOpen: true,
                         title: 'Error',
-                        message: 'No se pudo eliminar la sede.',
+                        message: error.message || 'No se pudo eliminar la sede.',
                         type: 'danger',
                         onConfirm: () => { },
                         cancelText: null

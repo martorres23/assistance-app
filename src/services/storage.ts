@@ -70,6 +70,15 @@ export const StorageService = {
         }));
     },
 
+    deleteAllRecordsForUser: async (userId: string): Promise<{ error: any }> => {
+        const { error } = await supabase
+            .from('attendance_records')
+            .delete()
+            .eq('user_id', userId);
+
+        return { error };
+    },
+
     deleteRecordsForUser: async (userId: string, datePrefix: string): Promise<{ error: any }> => {
         // En Supabase, el timestamp está en UTC.
         // Colombia está en UTC-5.
