@@ -11,7 +11,19 @@ export const PayrollUtils = {
         endDate?: Date,
         mode: 'summary' | 'detailed' = 'summary'
     ) => {
-        const dateRange = startDate && endDate ? { start: startDate, end: endDate } : undefined;
+        // If dates are not provided (History mode), detect min/max from records
+        let finalStart = startDate;
+        let finalEnd = endDate;
+
+        if (!finalStart || !finalEnd) {
+            const timestamps = records.map(r => new Date(r.timestamp).getTime());
+            if (timestamps.length > 0) {
+                finalStart = new Date(Math.min(...timestamps));
+                finalEnd = new Date(Math.max(...timestamps));
+            }
+        }
+
+        const dateRange = finalStart && finalEnd ? { start: finalStart, end: finalEnd } : undefined;
         const data: any[] = [];
 
         if (mode === 'summary') {
@@ -28,36 +40,29 @@ export const PayrollUtils = {
                     'Sede': userSede?.name || 'No asignada',
                     'Horas Totales': Number(stats.totalHours.toFixed(2)),
                     'Días Trabajados': daysWorked,
-                    'Periodo Inicio': startDate ? startDate.toLocaleDateString() : 'Inicio Histórico',
-                    'Periodo Fin': endDate ? endDate.toLocaleDateString() : 'A la fecha'
+                    'Periodo Inicio': finalStart ? finalStart.toLocaleDateString() : '—',
+                    'Periodo Fin': finalEnd ? finalEnd.toLocaleDateString() : '—'
                 });
             });
         } else {
-            // Detailed: Group by user and then by day
+            // Detailed: Pivot Table (Rows = Dates, Columns = Employees)
+            // 1. Get unique dates in range sorted
+            const uniqueDates = new Set<string>();
             users.forEach(user => {
-                const userSede = sedes.find(s => s.id === user.sedeId);
-                const userRecords = records.filter(r => r.userId === user.id);
-                const sessions = AnalyticsUtils.getAttendanceSessions(userRecords, user);
+                const stats = AnalyticsUtils.calculateHours(records, user.id, dateRange);
+                stats.dailyStats.forEach(d => uniqueDates.add(d.date));
+            });
+            const sortedDates = Array.from(uniqueDates).sort();
 
-                // Filter sessions by date range
-                const filteredSessions = sessions.filter(s => {
-                    if (!dateRange) return true;
-                    const sessionDate = new Date(s.date + 'T00:00:00');
-                    return sessionDate >= dateRange.start && sessionDate <= dateRange.end;
+            // 2. Build rows
+            sortedDates.forEach(date => {
+                const row: any = { 'Fecha': date };
+                users.forEach(user => {
+                    const stats = AnalyticsUtils.calculateHours(records, user.id, dateRange);
+                    const dayStat = stats.dailyStats.find(d => d.date === date);
+                    row[user.name] = dayStat ? `${dayStat.hours}h` : '0h';
                 });
-
-                filteredSessions.forEach(session => {
-                    data.push({
-                        'Fecha': session.date,
-                        'Documento de Identidad': user.id,
-                        'Nombre': user.name,
-                        'Sede': userSede?.name || 'No asignada',
-                        'Estado': session.status,
-                        'Entrada': session.entry || '—',
-                        'Salida': session.exit || '—',
-                        'Horas': session.hours
-                    });
-                });
+                data.push(row);
             });
         }
 
