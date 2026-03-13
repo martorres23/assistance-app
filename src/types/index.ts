@@ -35,3 +35,12 @@ export interface AttendanceRecord {
     photoUrl?: string; // Data URL or path
     notes?: string;
 }
+
+export interface Note {
+    id: string;
+    title: string;
+    content: string;
+    color: string;
+    createdAt: string;
+    updatedAt: string;
+}

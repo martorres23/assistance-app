@@ -5,7 +5,7 @@ import { AnalyticsUtils, type AttendanceSession } from '../../utils/analytics';
 import { StorageService } from '../../services/storage';
 import { AuthService } from '../../services/auth';
 import type { AttendanceRecord, User, Sede } from '../../types';
-import { LogOut, Map as MapIcon, List, Clock, Users, LayoutDashboard, Menu, FileText, Building, ExternalLink } from 'lucide-react';
+import { LogOut, Map as MapIcon, List, Clock, Users, LayoutDashboard, Menu, FileText, Building, ExternalLink, StickyNote } from 'lucide-react';
 import { AttendanceDetailView } from './AttendanceDetailView';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
@@ -26,6 +26,7 @@ import { AdminStatsView } from './AdminStatsView';
 import { AdminEmployeeList } from './AdminEmployeeList';
 import { AdminSedeList } from './AdminSedeList';
 import { AdminPayrollView } from './AdminPayrollView';
+import { AdminNotesView } from './AdminNotesView';
 
 export const AdminDashboard: React.FC = () => {
     const navigate = useNavigate();
@@ -36,8 +37,8 @@ export const AdminDashboard: React.FC = () => {
     const [selectedSession, setSelectedSession] = useState<AttendanceSession | null>(null);
 
     // Restore last view from sessionStorage, default to 'list'
-    const savedView = sessionStorage.getItem('admin_last_view') as 'list' | 'map' | 'stats' | 'employees' | 'sedes' | 'payroll' | null;
-    const [view, setView] = useState<'list' | 'map' | 'stats' | 'employees' | 'sedes' | 'payroll'>(savedView || 'list');
+    const savedView = sessionStorage.getItem('admin_last_view') as 'list' | 'map' | 'stats' | 'employees' | 'sedes' | 'payroll' | 'notes' | null;
+    const [view, setView] = useState<'list' | 'map' | 'stats' | 'employees' | 'sedes' | 'payroll' | 'notes'>(savedView || 'list');
 
     // Close sidebar by default on mobile, open on desktop
     const [isSidebarOpen, setIsSidebarOpen] = useState(window.innerWidth >= 768);
@@ -100,6 +101,7 @@ export const AdminDashboard: React.FC = () => {
         { id: 'employees', label: 'Empleados', icon: Users },
         { id: 'sedes', label: 'Sedes', icon: Building },
         { id: 'payroll', label: 'Generar Nómina', icon: FileText },
+        { id: 'notes', label: 'Notas', icon: StickyNote },
     ] as const;
 
     return (
@@ -223,6 +225,8 @@ export const AdminDashboard: React.FC = () => {
                     {view === 'payroll' && <AdminPayrollView records={records} />}
 
                     {view === 'stats' && <AdminStatsView records={records} />}
+
+                    {view === 'notes' && <AdminNotesView />}
 
                     <div className="flex-1 flex flex-col min-h-0 overflow-y-auto">
                         {selectedSession ? (
