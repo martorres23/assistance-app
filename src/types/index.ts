@@ -16,7 +16,8 @@ export interface User {
     name: string;
     role: UserRole;
     pin: string;
-    sedeId?: string; // Optional for admin, required for employees ideally
+    sedeId?: string; // Legacy field for compatibility during migration
+    sedeIds?: string[]; // Multiple assigned sedes
 }
 
 export interface AttendanceRecord {
@@ -25,6 +26,7 @@ export interface AttendanceRecord {
     userName: string;
     type: 'in' | 'out';
     timestamp: string; // ISO string
+    sedeId?: string; // Sede where this record was created
     location: {
         lat: number;
         lng: number;

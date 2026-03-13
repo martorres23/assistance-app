@@ -18,7 +18,8 @@ export const AuthService = {
             name: user.name,
             role: user.role as any,
             pin: user.pin,
-            sedeId: user.sede_id
+            sedeId: user.sede_id,
+            sedeIds: user.sede_ids || []
         };
 
         localStorage.setItem(AUTH_KEY, JSON.stringify(formattedUser));
@@ -117,7 +118,8 @@ export const AuthService = {
             name: u.name,
             role: u.role as any,
             pin: u.pin,
-            sedeId: u.sede_id
+            sedeId: u.sede_id,
+            sedeIds: u.sede_ids || []
         }));
     },
 
@@ -129,7 +131,8 @@ export const AuthService = {
                 name: user.name,
                 role: user.role,
                 pin: user.pin,
-                sede_id: user.sedeId
+                sede_id: user.sedeId,
+                sede_ids: user.sedeIds || []
             });
         return { error };
     },
@@ -151,7 +154,8 @@ export const AuthService = {
                 name: updatedUser.name,
                 role: updatedUser.role,
                 pin: updatedUser.pin,
-                sede_id: updatedUser.sedeId
+                sede_id: updatedUser.sedeId,
+                sede_ids: updatedUser.sedeIds || []
             })
             .eq('id', idToMatch);
         return { error };

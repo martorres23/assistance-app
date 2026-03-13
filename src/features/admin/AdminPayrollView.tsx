@@ -64,7 +64,9 @@ export const AdminPayrollView: React.FC<AdminPayrollViewProps> = ({ records }) =
 
         let usersToExport = users;
         if (selectedSede !== 'all') {
-            usersToExport = usersToExport.filter((u: User) => u.sedeId === selectedSede);
+            usersToExport = usersToExport.filter((u: User) =>
+                u.sedeIds?.includes(selectedSede) || u.sedeId === selectedSede
+            );
         }
         if (selectedEmployee !== 'all') {
             usersToExport = usersToExport.filter((u: User) => u.id === selectedEmployee);
@@ -209,7 +211,7 @@ export const AdminPayrollView: React.FC<AdminPayrollViewProps> = ({ records }) =
                             >
                                 <option value="all">Todos los Empleados</option>
                                 {users
-                                    .filter(u => selectedSede === 'all' || u.sedeId === selectedSede)
+                                    .filter(u => selectedSede === 'all' || u.sedeIds?.includes(selectedSede) || u.sedeId === selectedSede)
                                     .map((u: User) => (
                                         <option key={u.id} value={u.id}>{u.name}</option>
                                     ))

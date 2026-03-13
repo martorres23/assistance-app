@@ -8,24 +8,28 @@ interface EmployeeProfileProps {
 }
 
 export const EmployeeProfile: React.FC<EmployeeProfileProps> = ({ user }) => {
-    const [sede, setSede] = useState<Sede | undefined>(undefined);
+    const [sedes, setSedes] = useState<Sede[]>([]);
     const [isLoading, setIsLoading] = useState(true);
 
     useEffect(() => {
-        const fetchSede = async () => {
+        const fetchSedes = async () => {
             setIsLoading(true);
             try {
-                const sedeData = await AuthService.getSede(user.sedeId);
-                setSede(sedeData);
+                const sedeIds = (user.sedeIds && user.sedeIds.length > 0)
+                    ? user.sedeIds
+                    : (user.sedeId ? [user.sedeId] : []);
+
+                const sedesData = await Promise.all(sedeIds.map(id => AuthService.getSede(id)));
+                setSedes(sedesData.filter((s): s is Sede => s !== undefined));
             } catch (error) {
-                console.error('Error fetching sede for profile:', error);
+                console.error('Error fetching sedes for profile:', error);
             } finally {
                 setIsLoading(false);
             }
         };
 
-        fetchSede();
-    }, [user.sedeId]);
+        fetchSedes();
+    }, [user.sedeId, user.sedeIds]);
 
     return (
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -42,24 +46,24 @@ export const EmployeeProfile: React.FC<EmployeeProfileProps> = ({ user }) => {
             <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
                 <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
                     <Building className="w-5 h-5 text-gray-500" />
-                    Sede Asignada
+                    {sedes.length > 1 ? 'Sedes Asignadas' : 'Sede Asignada'}
                 </h3>
 
                 {isLoading ? (
                     <div className="h-24 bg-gray-50 animate-pulse rounded-lg border border-gray-100"></div>
-                ) : sede ? (
-                    <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
-                        <div className="flex items-start gap-3">
-                            <MapPin className="w-5 h-5 text-blue-600 mt-1 shrink-0" />
-                            <div>
-                                <h4 className="font-bold text-blue-900">{sede.name}</h4>
-                                <p className="text-blue-700 text-sm mt-1">{sede.address}</p>
-                                <div className="mt-2 text-xs text-blue-600 flex gap-2">
-                                    <span>Lat: {sede.location.lat}</span>
-                                    <span>Lng: {sede.location.lng}</span>
+                ) : sedes.length > 0 ? (
+                    <div className="space-y-3">
+                        {sedes.map(s => (
+                            <div key={s.id} className="bg-blue-50 p-4 rounded-lg border border-blue-100">
+                                <div className="flex items-start gap-3">
+                                    <MapPin className="w-5 h-5 text-blue-600 mt-1 shrink-0" />
+                                    <div>
+                                        <h4 className="font-bold text-blue-900">{s.name}</h4>
+                                        <p className="text-blue-700 text-sm mt-1">{s.address}</p>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
+                        ))}
                     </div>
                 ) : (
                     <div className="text-center p-8 bg-gray-50 rounded-lg border border-dashed border-gray-300">

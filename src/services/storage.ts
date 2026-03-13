@@ -41,7 +41,8 @@ export const StorageService = {
                 lat: record.location.lat,
                 lng: record.location.lng,
                 accuracy: record.location.accuracy,
-                photo_url: photoUrl
+                photo_url: photoUrl,
+                sede_id: record.sedeId
             });
 
         return { error: dbError };
@@ -66,7 +67,8 @@ export const StorageService = {
                 lng: r.lng,
                 accuracy: r.accuracy
             },
-            photoUrl: r.photo_url
+            photoUrl: r.photo_url,
+            sedeId: r.sede_id
         }));
     },
 

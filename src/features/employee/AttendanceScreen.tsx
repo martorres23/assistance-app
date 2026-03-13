@@ -37,7 +37,8 @@ export const AttendanceScreen: React.FC = () => {
     const [location, setLocation] = useState<{ lat: number; lng: number, accuracy: number } | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
-    const [assignedSede, setAssignedSede] = useState<Sede | undefined>(undefined);
+    const [assignedSedes, setAssignedSedes] = useState<Sede[]>([]);
+    const [activeSede, setActiveSede] = useState<Sede | undefined>(undefined);
     const [records, setRecords] = useState<AttendanceRecord[]>([]);
     const [showSuccessModal, setShowSuccessModal] = useState(false);
     const [showErrorModal, setShowErrorModal] = useState(false);
@@ -49,11 +50,16 @@ export const AttendanceScreen: React.FC = () => {
         const fetchData = async () => {
             setIsLoading(true);
             try {
-                const [sede, allRecords] = await Promise.all([
-                    AuthService.getSede(user.sedeId),
+                const sedeIds = (user.sedeIds && user.sedeIds.length > 0)
+                    ? user.sedeIds
+                    : (user.sedeId ? [user.sedeId] : []);
+
+                const [sedesData, allRecords] = await Promise.all([
+                    Promise.all(sedeIds.map(id => AuthService.getSede(id))),
                     StorageService.getRecords()
                 ]);
-                setAssignedSede(sede);
+
+                setAssignedSedes(sedesData.filter((s): s is Sede => s !== undefined));
                 setRecords(allRecords);
             } catch (error) {
                 console.error('Error fetching data:', error);
@@ -65,14 +71,34 @@ export const AttendanceScreen: React.FC = () => {
         fetchData();
     }, [user?.id]);
 
-    // Calculate distance and check range
-    const distanceToSede = (location && assignedSede)
-        ? GeofencingUtils.calculateDistance(location.lat, location.lng, assignedSede.location.lat, assignedSede.location.lng)
-        : null;
+    // Detect active sede based on location
+    useEffect(() => {
+        if (!location || assignedSedes.length === 0) return;
 
-    const isWithinRange = (location && assignedSede)
-        ? GeofencingUtils.isWithinRange(location.lat, location.lng, assignedSede.location.lat, assignedSede.location.lng, assignedSede.radiusMeters || 100)
+        const matchedSede = assignedSedes.find(s =>
+            GeofencingUtils.isWithinRange(location.lat, location.lng, s.location.lat, s.location.lng, s.radiusMeters || 100)
+        );
+
+        if (matchedSede) {
+            setActiveSede(matchedSede);
+        } else {
+            // If none matched, maybe just pick the closest one for UI feedback
+            const closest = [...assignedSedes].sort((a, b) => {
+                const distA = GeofencingUtils.calculateDistance(location.lat, location.lng, a.location.lat, a.location.lng);
+                const distB = GeofencingUtils.calculateDistance(location.lat, location.lng, b.location.lat, b.location.lng);
+                return distA - distB;
+            })[0];
+            setActiveSede(closest);
+        }
+    }, [location, assignedSedes]);
+
+    const isWithinRange = (location && activeSede)
+        ? GeofencingUtils.isWithinRange(location.lat, location.lng, activeSede.location.lat, activeSede.location.lng, activeSede.radiusMeters || 100)
         : false;
+
+    const distanceToActiveSede = (location && activeSede)
+        ? GeofencingUtils.calculateDistance(location.lat, location.lng, activeSede.location.lat, activeSede.location.lng)
+        : null;
 
     const handleLogout = () => {
         AuthService.logout();
@@ -104,6 +130,7 @@ export const AttendanceScreen: React.FC = () => {
             timestamp: new Date().toISOString(),
             location: location,
             photoUrl: photoUrl,
+            sedeId: activeSede?.id
         };
 
         const { error } = await StorageService.saveRecord(newRecord);
@@ -200,23 +227,25 @@ export const AttendanceScreen: React.FC = () => {
                         <div className="mb-6 w-full flex flex-col items-center">
                             <GeoLocation onLocationFound={setLocation} />
 
-                            {location && assignedSede && (
+                            {location && activeSede && (
                                 <div className={`mt-4 w-full p-3 rounded-lg border flex items-center gap-3 ${isWithinRange ? 'bg-green-50 border-green-200 text-green-700' : 'bg-red-50 border-red-200 text-red-700'}`}>
                                     <MapPin className="w-5 h-5 shrink-0" />
                                     <div className="flex-1">
                                         <p className="font-bold text-sm">
-                                            {isWithinRange ? 'Estás en la zona correcta' : 'Estás fuera de zona'}
+                                            {isWithinRange ? `Estás en: ${activeSede.name}` : 'Estás fuera de zona'}
                                         </p>
                                         <p className="text-xs opacity-90">
-                                            Distancia a {assignedSede.name}: <span className="font-mono font-bold">{Math.round(distanceToSede || 0)}m</span> (Max {assignedSede.radiusMeters || 100}m)
+                                            {isWithinRange
+                                                ? `Ubicación validada correctamente.`
+                                                : `Sede más cercana: ${activeSede.name} a ${Math.round(distanceToActiveSede || 0)}m`}
                                         </p>
                                     </div>
                                 </div>
                             )}
 
-                            {location && !assignedSede && (
+                            {location && assignedSedes.length === 0 && (
                                 <div className="mt-4 w-full p-3 bg-amber-50 border border-amber-200 text-amber-700 rounded-lg text-sm text-center">
-                                    ⚠️ No tienes sede asignada. El registro podría ser inválido.
+                                    ⚠️ No tienes sedes asignadas. Contacta al administrador.
                                 </div>
                             )}
 
@@ -241,19 +270,23 @@ export const AttendanceScreen: React.FC = () => {
                                             <Popup>Estás aquí</Popup>
                                         </Marker>
 
-                                        {/* Sede Position & Zone */}
-                                        {assignedSede && (
-                                            <>
-                                                <Marker position={[assignedSede.location.lat, assignedSede.location.lng]}>
-                                                    <Popup>{assignedSede.name}</Popup>
+                                        {/* Sede Positions & Zones */}
+                                        {assignedSedes.map(s => (
+                                            <React.Fragment key={s.id}>
+                                                <Marker position={[s.location.lat, s.location.lng]}>
+                                                    <Popup>{s.name}</Popup>
                                                 </Marker>
                                                 <Circle
-                                                    center={[assignedSede.location.lat, assignedSede.location.lng]}
-                                                    radius={assignedSede.radiusMeters || 100}
-                                                    pathOptions={{ color: isWithinRange ? 'green' : 'red', fillColor: isWithinRange ? 'green' : 'red', fillOpacity: 0.2 }}
+                                                    center={[s.location.lat, s.location.lng]}
+                                                    radius={s.radiusMeters || 100}
+                                                    pathOptions={{
+                                                        color: activeSede?.id === s.id ? (isWithinRange ? 'green' : 'red') : 'gray',
+                                                        fillColor: activeSede?.id === s.id ? (isWithinRange ? 'green' : 'red') : 'gray',
+                                                        fillOpacity: 0.1
+                                                    }}
                                                 />
-                                            </>
-                                        )}
+                                            </React.Fragment>
+                                        ))}
                                     </MapContainer>
                                 </div>
                             )}

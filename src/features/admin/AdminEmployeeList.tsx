@@ -19,12 +19,14 @@ export const AdminEmployeeList: React.FC<AdminEmployeeListProps> = ({ records, o
     const [employees, setEmployees] = useState<User[]>([]);
     const [sedes, setSedes] = useState<Sede[]>([]);
     const [isLoading, setIsLoading] = useState(true);
+    const [isSaving, setIsSaving] = useState(false);
     const [formData, setFormData] = useState<Partial<User>>({
         id: '',
         name: '',
         role: 'employee',
         pin: '',
-        sedeId: ''
+        sedeId: '',
+        sedeIds: []
     });
     const [selectedPhoto, setSelectedPhoto] = useState<string | null>(null);
     const [selectedSession, setSelectedSession] = useState<AttendanceSession | null>(null);
@@ -72,9 +74,9 @@ export const AdminEmployeeList: React.FC<AdminEmployeeListProps> = ({ records, o
 
     const handleOpenForm = (user: User | 'new') => {
         if (user === 'new') {
-            setFormData({ id: '', name: '', role: 'employee', pin: '', sedeId: '' });
+            setFormData({ id: '', name: '', role: 'employee', pin: '', sedeId: '', sedeIds: [] });
         } else {
-            setFormData(user);
+            setFormData({ ...user, sedeIds: user.sedeIds || (user.sedeId ? [user.sedeId] : []) });
         }
         setEditingUser(user);
         setSelectedEmployeeId(null); // Close detail view when editing
@@ -94,7 +96,7 @@ export const AdminEmployeeList: React.FC<AdminEmployeeListProps> = ({ records, o
         }
 
         const performSave = async () => {
-            setIsLoading(true);
+            setIsSaving(true);
             try {
                 if (editingUser === 'new') {
                     const exists = employees.some(u => u.id === formData.id);
@@ -114,9 +116,11 @@ export const AdminEmployeeList: React.FC<AdminEmployeeListProps> = ({ records, o
                         name: formData.name!,
                         role: 'employee',
                         pin: formData.pin!,
-                        sedeId: formData.sedeId
+                        sedeId: formData.sedeIds?.[0], // Keep for compatibility
+                        sedeIds: formData.sedeIds || []
                     };
-                    await AuthService.addUser(userToAdd);
+                    const { error } = await AuthService.addUser(userToAdd);
+                    if (error) throw error;
                 } else if (editingUser && typeof editingUser !== 'string') {
                     const oldId = editingUser.id;
                     const newId = formData.id!;
@@ -136,39 +140,40 @@ export const AdminEmployeeList: React.FC<AdminEmployeeListProps> = ({ records, o
                         }
                     }
 
-                    await AuthService.updateUser({
+                    const { error } = await AuthService.updateUser({
                         ...editingUser,
                         ...formData
                     } as User, oldId);
+                    if (error) throw error;
                 }
 
                 setEditingUser(null);
                 await fetchData(); // Refresh list
                 onRefreshRecords(); // Refresh history if needed
-            } catch (error) {
+            } catch (error: any) {
+                console.error('Error saving user:', error);
                 setConfirmModal({
                     isOpen: true,
                     title: 'Error',
-                    message: 'Error al guardar cambios',
+                    message: `Error al guardar: ${error.message || 'Error desconocido'}`,
                     type: 'danger',
                     onConfirm: () => { },
                 });
             } finally {
-                setIsLoading(false);
+                setIsSaving(false);
             }
         };
 
-        if (editingUser !== 'new' && editingUser !== null) {
-            setConfirmModal({
-                isOpen: true,
-                title: 'Actualizar Empleado',
-                message: '¿Confirma que desea guardar los cambios realizados en el perfil del empleado?',
-                type: 'info',
-                onConfirm: performSave
-            });
-        } else {
-            performSave();
-        }
+        const isNew = editingUser === 'new';
+        setConfirmModal({
+            isOpen: true,
+            title: isNew ? 'Guardar Nuevo Empleado' : 'Actualizar Empleado',
+            message: isNew
+                ? '¿Confirma que desea registrar este nuevo empleado en el sistema?'
+                : '¿Confirma que desea guardar los cambios realizados en el perfil del empleado?',
+            type: 'info',
+            onConfirm: performSave
+        });
     };
 
     const handleDeleteUser = async (id: string, e: React.MouseEvent) => {
@@ -294,7 +299,9 @@ export const AdminEmployeeList: React.FC<AdminEmployeeListProps> = ({ records, o
                                                 </span>
                                                 <span className="text-sm text-gray-500 flex items-center gap-1">
                                                     <MapPin className="w-3 h-3" />
-                                                    {getSedeName(employee?.sedeId)}
+                                                    {employee?.sedeIds && employee.sedeIds.length > 0
+                                                        ? employee.sedeIds.map(id => getSedeName(id)).join(', ')
+                                                        : getSedeName(employee?.sedeId)}
                                                 </span>
                                             </div>
                                         </div>
@@ -429,19 +436,30 @@ export const AdminEmployeeList: React.FC<AdminEmployeeListProps> = ({ records, o
                                         required
                                     />
                                 </div>
-                                <div className="flex flex-col gap-1.5">
-                                    <label className="text-[10px] font-black text-gray-500 uppercase tracking-wider ml-1">Sede de Trabajo</label>
-                                    <select
-                                        className="p-3 border border-gray-200 rounded-xl outline-none focus:ring-4 focus:ring-blue-100 focus:border-blue-400 bg-white transition-all font-medium appearance-none"
-                                        value={formData.sedeId}
-                                        onChange={e => setFormData({ ...formData, sedeId: e.target.value })}
-                                        required
-                                    >
-                                        <option value="">Seleccione una sede</option>
+                                <div className="flex flex-col gap-1.5 md:col-span-2">
+                                    <label className="text-[10px] font-black text-gray-500 uppercase tracking-wider ml-1">Sedes de Trabajo Asignadas</label>
+                                    <div className="grid grid-cols-2 md:grid-cols-3 gap-3 p-4 bg-white border border-gray-200 rounded-xl">
                                         {sedes.map(s => (
-                                            <option key={s.id} value={s.id}>{s.name}</option>
+                                            <label key={s.id} className="flex items-center gap-2 p-2 hover:bg-gray-50 rounded-lg cursor-pointer transition-colors border border-transparent hover:border-gray-100">
+                                                <input
+                                                    type="checkbox"
+                                                    className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500"
+                                                    checked={formData.sedeIds?.includes(s.id)}
+                                                    onChange={e => {
+                                                        const current = formData.sedeIds || [];
+                                                        const next = e.target.checked
+                                                            ? [...current, s.id]
+                                                            : current.filter(id => id !== s.id);
+                                                        setFormData({ ...formData, sedeIds: next });
+                                                    }}
+                                                />
+                                                <span className="text-sm font-medium text-gray-700">{s.name}</span>
+                                            </label>
                                         ))}
-                                    </select>
+                                    </div>
+                                    {(!formData.sedeIds || formData.sedeIds.length === 0) && (
+                                        <p className="text-[10px] text-amber-600 font-bold mt-1 ml-1">⚠️ Seleccione al menos una sede para este empleado</p>
+                                    )}
                                 </div>
                                 <div className="flex justify-end gap-2 md:col-span-2 border-t pt-4 mt-2">
                                     <button
@@ -453,9 +471,17 @@ export const AdminEmployeeList: React.FC<AdminEmployeeListProps> = ({ records, o
                                     </button>
                                     <button
                                         type="submit"
-                                        className="px-6 py-2 bg-blue-600 text-white rounded-lg font-extrabold shadow-lg shadow-blue-100 hover:bg-blue-700 transition-all active:scale-95"
+                                        disabled={isSaving || !formData.id || !formData.name || !formData.pin || (!formData.sedeIds || formData.sedeIds.length === 0)}
+                                        className="px-6 py-2 bg-blue-600 text-white rounded-lg font-extrabold shadow-lg shadow-blue-100 hover:bg-blue-700 disabled:opacity-50 transition-all active:scale-95 flex items-center justify-center gap-2"
                                     >
-                                        {editingUser === 'new' ? 'Guardar Empleado' : 'Actualizar Perfil'}
+                                        {isSaving ? (
+                                            <>
+                                                <RefreshCw className="w-4 h-4 animate-spin" />
+                                                <span>Guardando...</span>
+                                            </>
+                                        ) : (
+                                            editingUser === 'new' ? 'Guardar Empleado' : 'Actualizar Perfil'
+                                        )}
                                     </button>
                                 </div>
                             </form>
@@ -500,9 +526,20 @@ export const AdminEmployeeList: React.FC<AdminEmployeeListProps> = ({ records, o
                                             </span>
                                         </td>
                                         <td className="py-4 px-4">
-                                            <div className="flex items-center gap-1 text-gray-600">
-                                                <MapPin className="w-3 h-3" />
-                                                {getSedeName(employee.sedeId)}
+                                            <div className="flex flex-wrap gap-1">
+                                                {employee.sedeIds && employee.sedeIds.length > 0 ? (
+                                                    employee.sedeIds.map(id => (
+                                                        <span key={id} className="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-50 text-blue-700 rounded-full text-[10px] font-bold border border-blue-100">
+                                                            <MapPin className="w-2 h-2" />
+                                                            {getSedeName(id)}
+                                                        </span>
+                                                    ))
+                                                ) : (
+                                                    <div className="flex items-center gap-1 text-gray-400 italic text-xs">
+                                                        <MapPin className="w-3 h-3" />
+                                                        {getSedeName(employee.sedeId)}
+                                                    </div>
+                                                )}
                                             </div>
                                         </td>
                                         <td className="py-4 px-4 text-right">

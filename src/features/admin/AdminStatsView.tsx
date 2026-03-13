@@ -179,8 +179,9 @@ export const AdminStatsView: React.FC<AdminStatsViewProps> = ({ records }) => {
         records.forEach(r => {
             const rDate = new Date(r.timestamp);
             if (!dateRange || (rDate >= dateRange.start && rDate <= dateRange.end)) {
+                // Use record-level sedeId if available, fallback to user-level
                 const user = users.find(u => u.id === r.userId);
-                const sedeId = user?.sedeId || 'unknown';
+                const sedeId = r.sedeId || user?.sedeId || 'unknown';
                 sedeUsage.set(sedeId, (sedeUsage.get(sedeId) || 0) + 1);
             }
         });
